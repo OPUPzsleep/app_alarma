@@ -31,7 +31,7 @@ type Medicina = {
   id: number;
   nombre: string;
   descripcion: string;
-  hora: string;
+  horas: string[];
   photo: string | null;
   vecesPorDia: number;
   tipoCiclo: TipoCiclo;
@@ -50,38 +50,48 @@ type ChatMessage = {
 
 const STORAGE_KEY = "med_reminder_data";
 
-const formatearHora = (fecha: Date) =>
-  fecha.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// Formato interno sin ambigüedad (24h, ej. "21:17"). No usar formato de
+// 12h aquí: mezclar "9:17 p. m." con split(":") rompía el parseo (Invalid Date).
+const formatearHora = (fecha: Date) => {
+  const horas = String(fecha.getHours()).padStart(2, "0");
+  const minutos = String(fecha.getMinutes()).padStart(2, "0");
+  return `${horas}:${minutos}`;
+};
+
+// Formato solo para mostrar en pantalla (12h con a. m./p. m.)
+const formatearHoraVisual = (fecha: Date) =>
+  fecha.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 const parsearHora = (hora: string) => {
   const [horas, minutos] = hora.split(":").map(Number);
   const fecha = new Date();
-  fecha.setHours(horas, minutos, 0, 0);
+  fecha.setHours(horas || 0, minutos || 0, 0, 0);
   return fecha;
 };
 
-const generarHorasDeToma = (horaBase: Date, vecesPorDia: number) => {
-  if (vecesPorDia <= 1) return [horaBase];
-
-  const intervaloHoras = 24 / vecesPorDia;
-  const horas: Date[] = [];
-
-  for (let indice = 0; indice < vecesPorDia; indice += 1) {
-    const siguienteHora = new Date(
-      horaBase.getTime() + indice * intervaloHoras * 60 * 60 * 1000,
-    );
-    horas.push(siguienteHora);
+// Convierte datos guardados con el formato viejo (un solo "hora" en 12h)
+// al formato nuevo ("horas": string[] en 24h), para no romper medicinas
+// creadas antes de esta actualización.
+const migrarMedicina = (med: any): Medicina => {
+  if (Array.isArray(med.horas) && med.horas.length > 0) {
+    return med as Medicina;
   }
 
-  return horas;
+  let horaMigrada = "08:00";
+  const coincidencia = String(med.hora ?? "").match(/^(\d{1,2}):(\d{2})/);
+  if (coincidencia) {
+    horaMigrada = `${coincidencia[1].padStart(2, "0")}:${coincidencia[2]}`;
+  }
+
+  return {
+    ...med,
+    horas: [horaMigrada],
+  };
 };
 
 const normalizarMedicinas = (lista: Medicina[]) => {
   const ahora = new Date();
-  return lista.filter((med) => {
+  return lista.map(migrarMedicina).filter((med) => {
     if (med.tipoCiclo === "temporal" && med.fechaFin) {
       return new Date(med.fechaFin) >= ahora;
     }
@@ -106,11 +116,27 @@ export default function HomeScreen() {
 
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [horaSeleccionada, setHoraSeleccionada] = useState(new Date());
-  const [mostrarPicker, setMostrarPicker] = useState(false);
+  const [horasSeleccionadas, setHorasSeleccionadas] = useState<Date[]>([
+    new Date(),
+  ]);
+  const [pickerIndexActivo, setPickerIndexActivo] = useState<number | null>(
+    null,
+  );
   const [tipoCiclo, setTipoCiclo] = useState<TipoCiclo>("permanente");
   const [duracionDias, setDuracionDias] = useState("7");
   const [vecesPorDia, setVecesPorDia] = useState("1");
+
+  const actualizarVecesPorDia = (valor: string) => {
+    setVecesPorDia(valor);
+    const cantidad = Math.min(6, Math.max(1, Number(valor) || 1));
+    setHorasSeleccionadas((prev) => {
+      const nuevas = [...prev];
+      while (nuevas.length < cantidad) {
+        nuevas.push(new Date());
+      }
+      return nuevas.slice(0, cantidad);
+    });
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -148,10 +174,11 @@ export default function HomeScreen() {
         sound: "default",
       },
       trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: horaDeToma.getHours(),
         minute: horaDeToma.getMinutes(),
         repeats: true,
-      } as Notifications.DailyTriggerInput,
+      },
     });
   };
 
@@ -163,13 +190,8 @@ export default function HomeScreen() {
         if (fin < new Date()) continue;
       }
 
-      const horasDeToma = generarHorasDeToma(
-        parsearHora(med.hora),
-        med.vecesPorDia ?? 1,
-      );
-
-      for (const horaDeToma of horasDeToma) {
-        await programarAlarma(med.nombre, med.descripcion, horaDeToma);
+      for (const horaTexto of med.horas) {
+        await programarAlarma(med.nombre, med.descripcion, parsearHora(horaTexto));
       }
     }
   };
@@ -207,15 +229,33 @@ export default function HomeScreen() {
       return;
     }
 
-    const nuevasMeds = meds.map((m) =>
-      m.id === id ? { ...m, hora: m.hora } : m,
-    );
-
-    await saveMedications(nuevasMeds);
-    await sincronizarAlarmas(nuevasMeds);
+    await saveMedications(meds);
+    await sincronizarAlarmas(meds);
     Alert.alert(
       "¡Bien hecho!",
       "Se registró la toma y la medicina permanente sigue en la lista.",
+    );
+  };
+
+  const borrarMedicina = (id: number) => {
+    const med = meds.find((m) => m.id === id);
+    if (!med) return;
+
+    Alert.alert(
+      "Eliminar medicina",
+      `¿Seguro que quieres eliminar "${med.nombre}"? También se cancelan sus alarmas.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            const nuevasMeds = meds.filter((m) => m.id !== id);
+            await saveMedications(nuevasMeds);
+            await sincronizarAlarmas(nuevasMeds);
+          },
+        },
+      ],
     );
   };
 
@@ -246,7 +286,7 @@ export default function HomeScreen() {
     setNombre("");
     setDescripcion("");
     setPhotoUri(null);
-    setHoraSeleccionada(new Date());
+    setHorasSeleccionadas([new Date()]);
     setTipoCiclo("permanente");
     setDuracionDias("7");
     setVecesPorDia("1");
@@ -257,7 +297,9 @@ export default function HomeScreen() {
     setNombre(med.nombre);
     setDescripcion(med.descripcion);
     setPhotoUri(med.photo);
-    setHoraSeleccionada(parsearHora(med.hora));
+    setHorasSeleccionadas(
+      med.horas.length > 0 ? med.horas.map(parsearHora) : [new Date()],
+    );
     setTipoCiclo(med.tipoCiclo);
     setDuracionDias(med.diasDuracion ? String(med.diasDuracion) : "7");
     setVecesPorDia(String(med.vecesPorDia ?? 1));
@@ -289,7 +331,7 @@ export default function HomeScreen() {
       id: editingId ?? Date.now(),
       nombre: nombre.trim(),
       descripcion: descripcion.trim(),
-      hora: formatearHora(horaSeleccionada),
+      horas: horasSeleccionadas.slice(0, frecuenciaPorDia).map(formatearHora),
       photo: photoUri,
       vecesPorDia: frecuenciaPorDia,
       tipoCiclo,
@@ -305,13 +347,21 @@ export default function HomeScreen() {
       : [...meds, medData];
 
     await saveMedications(listaActualizada);
-    await sincronizarAlarmas(listaActualizada);
+
+    let avisoAlarma = `La alarma sonará a las ${medData.horas
+      .map((h) => formatearHoraVisual(parsearHora(h)))
+      .join(", ")}.`;
+
+    try {
+      await sincronizarAlarmas(listaActualizada);
+    } catch (error) {
+      avisoAlarma =
+        "Se guardó la medicina, pero hubo un problema al programar la notificación. Revisa que le diste permiso de notificaciones a la app.";
+    }
 
     Alert.alert(
       "Éxito",
-      editingId
-        ? `Se actualizó la alarma para ${medData.nombre}.`
-        : `La alarma sonará a las ${medData.hora}.`,
+      editingId ? `Se actualizó la alarma para ${medData.nombre}.` : avisoAlarma,
     );
     limpiarFormulario();
     setActiveTab("home");
@@ -322,6 +372,9 @@ export default function HomeScreen() {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
+
+  const horasLegibles = (med: Medicina) =>
+    med.horas.map((h) => formatearHoraVisual(parsearHora(h))).join(", ");
 
   const responderPregunta = (pregunta: string) => {
     const texto = normalizarTexto(pregunta);
@@ -340,7 +393,7 @@ export default function HomeScreen() {
       const resumen = meds
         .map(
           (med) =>
-            `• ${med.nombre} a las ${med.hora}${med.descripcion ? ` — ${med.descripcion}` : ""}`,
+            `• ${med.nombre} a las ${horasLegibles(med)}${med.descripcion ? ` — ${med.descripcion}` : ""}`,
         )
         .join("\n");
       return `Lo que se está dando ahora es:\n${resumen}`;
@@ -348,7 +401,7 @@ export default function HomeScreen() {
 
     if (texto.includes("hora") || texto.includes("cuando")) {
       const resumen = meds
-        .map((med) => `• ${med.nombre}: ${med.hora}`)
+        .map((med) => `• ${med.nombre}: ${horasLegibles(med)}`)
         .join("\n");
       return `Las horas registradas son:\n${resumen}`;
     }
@@ -358,7 +411,7 @@ export default function HomeScreen() {
     );
 
     if (coincidencia) {
-      return `${coincidencia.nombre} se da a las ${coincidencia.hora}${coincidencia.descripcion ? ` y ${coincidencia.descripcion.toLowerCase()}` : ""}.`;
+      return `${coincidencia.nombre} se da a las ${horasLegibles(coincidencia)}${coincidencia.descripcion ? ` y ${coincidencia.descripcion.toLowerCase()}` : ""}.`;
     }
 
     return "Puedo ayudarte con preguntas como: ¿qué le estoy dando? o ¿a qué hora?";
@@ -406,7 +459,9 @@ export default function HomeScreen() {
             {meds.map((item) => (
               <View key={item.id} style={styles.formCard}>
                 <Text style={styles.medName}>{item.nombre}</Text>
-                <Text style={styles.medDetail}>🕒 {item.hora}</Text>
+                <Text style={styles.medDetail}>
+                  🕒 {item.horas.map((h) => formatearHoraVisual(parsearHora(h))).join(", ")}
+                </Text>
                 <Text style={styles.medDetail}>
                   🔁 {item.vecesPorDia ?? 1} vez
                   {(item.vecesPorDia ?? 1) === 1 ? "" : "es"} al día
@@ -452,6 +507,12 @@ export default function HomeScreen() {
                     <Text style={styles.btnSecondaryText}>✅ Tomada</Text>
                   </TouchableOpacity>
                 </View>
+                <TouchableOpacity
+                  style={styles.btnDanger}
+                  onPress={() => borrarMedicina(item.id)}
+                >
+                  <Text style={styles.btnDangerText}>🗑️ Eliminar</Text>
+                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -526,35 +587,51 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              <Text style={styles.label}>Hora de la alarma</Text>
-              <TouchableOpacity
-                style={styles.input}
-                onPress={() => setMostrarPicker(true)}
-              >
-                <Text>{formatearHora(horaSeleccionada)}</Text>
-              </TouchableOpacity>
-
               <Text style={styles.label}>Veces al día</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Ej. 2"
                 keyboardType="number-pad"
                 value={vecesPorDia}
-                onChangeText={setVecesPorDia}
+                onChangeText={actualizarVecesPorDia}
               />
 
-              {mostrarPicker && (
+              {horasSeleccionadas.map((hora, index) => (
+                <View key={index}>
+                  <Text style={styles.label}>
+                    {horasSeleccionadas.length > 1
+                      ? `Hora — Toma ${index + 1}`
+                      : "Hora de la alarma"}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.input}
+                    onPress={() => setPickerIndexActivo(index)}
+                  >
+                    <Text>{formatearHoraVisual(hora)}</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {pickerIndexActivo !== null && (
                 <DateTimePicker
-                  value={horaSeleccionada}
+                  value={horasSeleccionadas[pickerIndexActivo]}
                   mode="time"
                   is24Hour={false}
                   display={Platform.OS === "ios" ? "spinner" : "default"}
                   onChange={(event, selectedDate) => {
-                    setMostrarPicker(Platform.OS === "ios");
-                    if (selectedDate) setHoraSeleccionada(selectedDate);
+                    const indice = pickerIndexActivo;
+                    setPickerIndexActivo(Platform.OS === "ios" ? indice : null);
+                    if (selectedDate && indice !== null) {
+                      setHorasSeleccionadas((prev) => {
+                        const nuevas = [...prev];
+                        nuevas[indice] = selectedDate;
+                        return nuevas;
+                      });
+                    }
                   }}
                 />
               )}
+
 
               <Text style={[styles.label, { marginTop: 20 }]}>
                 Foto (opcional)

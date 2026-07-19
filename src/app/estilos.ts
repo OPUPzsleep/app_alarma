@@ -190,6 +190,19 @@ export const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
+  btnDanger: {
+    backgroundColor: COLORS.card,
+    borderColor: "#C0392B",
+    borderWidth: 2,
+    borderRadius: 16,
+    padding: 13,
+    alignItems: "center",
+  },
+  btnDangerText: {
+    color: "#C0392B",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
   chatCard: {
     backgroundColor: COLORS.card,
     borderRadius: 22,
