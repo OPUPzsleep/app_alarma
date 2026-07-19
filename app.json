@@ -18,7 +18,10 @@
         "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.miprimeraapp"
+      "package": "com.anonymous.miprimeraapp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -43,7 +46,9 @@
       [
         "expo-notifications",
         {
-          "sounds": ["./src/assets/sounds/alarma.mp3"]
+          "sounds": [
+            "./src/assets/sounds/alarma.mp3"
+          ]
         }
       ],
       "@react-native-community/datetimepicker"
@@ -51,6 +56,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "307f8715-4a22-462a-98a5-f88737c048bd"
+      }
     }
   }
 }

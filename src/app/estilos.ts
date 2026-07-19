@@ -203,6 +203,14 @@ export const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
+  btnDisabled: {
+    backgroundColor: "#F0EEE7",
+    borderColor: COLORS.line,
+    opacity: 0.7,
+  },
+  btnDisabledText: {
+    color: COLORS.inkSoft,
+  },
   chatCard: {
     backgroundColor: COLORS.card,
     borderRadius: 22,

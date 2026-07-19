@@ -59,6 +59,7 @@ type Medicina = {
   fechaFin: string | null;
   tomasCompletadas: number;
   tomasTotales: number | null;
+  ultimaTomaEn: string | null;
 };
 
 type ChatMessage = {
@@ -92,18 +93,20 @@ const parsearHora = (hora: string) => {
 // al formato nuevo ("horas": string[] en 24h), para no romper medicinas
 // creadas antes de esta actualización.
 const migrarMedicina = (med: any): Medicina => {
-  if (Array.isArray(med.horas) && med.horas.length > 0) {
-    return med as Medicina;
+  const base = { ultimaTomaEn: med.ultimaTomaEn ?? null, ...med };
+
+  if (Array.isArray(base.horas) && base.horas.length > 0) {
+    return base as Medicina;
   }
 
   let horaMigrada = "08:00";
-  const coincidencia = String(med.hora ?? "").match(/^(\d{1,2}):(\d{2})/);
+  const coincidencia = String(base.hora ?? "").match(/^(\d{1,2}):(\d{2})/);
   if (coincidencia) {
     horaMigrada = `${coincidencia[1].padStart(2, "0")}:${coincidencia[2]}`;
   }
 
   return {
-    ...med,
+    ...base,
     horas: [horaMigrada],
   };
 };
@@ -217,9 +220,47 @@ export default function HomeScreen() {
     }
   };
 
+  // La hora programada más reciente que ya debió sonar (hoy o, si aún no
+  // llega ninguna hora de hoy, la de ayer). Sirve para saber si el turno
+  // actual ya fue confirmado.
+  const obtenerUltimaHoraProgramada = (med: Medicina): Date => {
+    const ahora = new Date();
+    let masReciente: Date | null = null;
+
+    for (const horaTexto of med.horas) {
+      const candidata = parsearHora(horaTexto);
+      if (candidata.getTime() > ahora.getTime()) {
+        candidata.setDate(candidata.getDate() - 1);
+      }
+      if (!masReciente || candidata.getTime() > masReciente.getTime()) {
+        masReciente = candidata;
+      }
+    }
+
+    return masReciente ?? ahora;
+  };
+
+  const yaTomadaEnEsteTurno = (med: Medicina): boolean => {
+    if (!med.ultimaTomaEn) return false;
+    return (
+      new Date(med.ultimaTomaEn).getTime() >=
+      obtenerUltimaHoraProgramada(med).getTime()
+    );
+  };
+
   const marcarComoTomada = async (id: number) => {
     const med = meds.find((m) => m.id === id);
     if (!med) return;
+
+    if (yaTomadaEnEsteTurno(med)) {
+      Alert.alert(
+        "Ya registrada",
+        "Ya marcaste esta toma. Se vuelve a habilitar cuando llegue la siguiente hora programada.",
+      );
+      return;
+    }
+
+    const ahoraISO = new Date().toISOString();
 
     if (med.tipoCiclo === "temporal") {
       const totalTomas =
@@ -239,7 +280,9 @@ export default function HomeScreen() {
       }
 
       const nuevasMeds = meds.map((m) =>
-        m.id === id ? { ...m, tomasCompletadas: tomasActuales } : m,
+        m.id === id
+          ? { ...m, tomasCompletadas: tomasActuales, ultimaTomaEn: ahoraISO }
+          : m,
       );
       await saveMedications(nuevasMeds);
       await sincronizarAlarmas(nuevasMeds);
@@ -250,8 +293,11 @@ export default function HomeScreen() {
       return;
     }
 
-    await saveMedications(meds);
-    await sincronizarAlarmas(meds);
+    const nuevasMeds = meds.map((m) =>
+      m.id === id ? { ...m, ultimaTomaEn: ahoraISO } : m,
+    );
+    await saveMedications(nuevasMeds);
+    await sincronizarAlarmas(nuevasMeds);
     Alert.alert(
       "¡Bien hecho!",
       "Se registró la toma y la medicina permanente sigue en la lista.",
@@ -361,6 +407,7 @@ export default function HomeScreen() {
       fechaFin,
       tomasCompletadas: medicinaAnterior?.tomasCompletadas ?? 0,
       tomasTotales: dias != null ? dias * frecuenciaPorDia : null,
+      ultimaTomaEn: medicinaAnterior?.ultimaTomaEn ?? null,
     };
 
     const listaActualizada = editingId
@@ -522,14 +569,28 @@ export default function HomeScreen() {
                     <Text style={styles.btnPrimaryText}>✏️ Editar</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.btnSecondary, styles.smallButton]}
+                    style={[
+                      styles.btnSecondary,
+                      styles.smallButton,
+                      yaTomadaEnEsteTurno(item) && styles.btnDisabled,
+                    ]}
                     onPress={() => marcarComoTomada(item.id)}
+                    disabled={yaTomadaEnEsteTurno(item)}
                   >
-                    <Text style={styles.btnSecondaryText}>✅ Tomada</Text>
+                    <Text
+                      style={[
+                        styles.btnSecondaryText,
+                        yaTomadaEnEsteTurno(item) && styles.btnDisabledText,
+                      ]}
+                    >
+                      {yaTomadaEnEsteTurno(item)
+                        ? "✅ Ya tomada"
+                        : "✅ Tomada"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity
-                  style={styles.btnDanger}
+                  style={[styles.btnDanger, { marginTop: 10 }]}
                   onPress={() => borrarMedicina(item.id)}
                 >
                   <Text style={styles.btnDangerText}>🗑️ Eliminar</Text>
