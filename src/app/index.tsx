@@ -38,6 +38,8 @@ type Medicina = {
   diasDuracion: number | null;
   fechaInicio: string;
   fechaFin: string | null;
+  tomasCompletadas: number;
+  tomasTotales: number | null;
 };
 
 type ChatMessage = {
@@ -47,7 +49,6 @@ type ChatMessage = {
 };
 
 const STORAGE_KEY = "med_reminder_data";
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? "";
 
 const formatearHora = (fecha: Date) =>
   fecha.toLocaleTimeString([], {
@@ -97,7 +98,7 @@ export default function HomeScreen() {
     {
       id: 1,
       author: "bot",
-      text: "Hola, soy tu asistente de medicinas. Puedes preguntarme: ¿qué le estoy dando?, ¿a qué hora? o ¿cuántas medicinas hay?",
+      text: "Hola, soy tu asistente de medicinas. Puedes preguntarme: ¿qué le estoy dando? o ¿a qué hora?",
     },
   ]);
   const [chatInput, setChatInput] = useState("");
@@ -199,10 +200,31 @@ export default function HomeScreen() {
     if (!med) return;
 
     if (med.tipoCiclo === "temporal") {
-      const nuevasMeds = meds.filter((m) => m.id !== id);
+      const totalTomas =
+        med.tomasTotales ?? (med.diasDuracion ?? 1) * (med.vecesPorDia ?? 1);
+      const tomasActuales = (med.tomasCompletadas ?? 0) + 1;
+      const tratamientoCompleto = tomasActuales >= totalTomas;
+
+      if (tratamientoCompleto) {
+        const nuevasMeds = meds.filter((m) => m.id !== id);
+        await saveMedications(nuevasMeds);
+        await sincronizarAlarmas(nuevasMeds);
+        Alert.alert(
+          "¡Tratamiento completado!",
+          `Ya completaste las ${totalTomas} tomas de ${med.nombre}. Se eliminó de la lista.`,
+        );
+        return;
+      }
+
+      const nuevasMeds = meds.map((m) =>
+        m.id === id ? { ...m, tomasCompletadas: tomasActuales } : m,
+      );
       await saveMedications(nuevasMeds);
       await sincronizarAlarmas(nuevasMeds);
-      Alert.alert("¡Bien hecho!", "Has marcado tu medicina como tomada.");
+      Alert.alert(
+        "¡Bien hecho!",
+        `Toma ${tomasActuales} de ${totalTomas} registrada.`,
+      );
       return;
     }
 
@@ -280,6 +302,10 @@ export default function HomeScreen() {
         ? new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString()
         : null;
 
+    const medicinaAnterior = editingId
+      ? meds.find((med) => med.id === editingId)
+      : undefined;
+
     const medData: Medicina = {
       id: editingId ?? Date.now(),
       nombre: nombre.trim(),
@@ -291,6 +317,8 @@ export default function HomeScreen() {
       diasDuracion: dias,
       fechaInicio,
       fechaFin,
+      tomasCompletadas: medicinaAnterior?.tomasCompletadas ?? 0,
+      tomasTotales: dias != null ? dias * frecuenciaPorDia : null,
     };
 
     const listaActualizada = editingId
@@ -346,10 +374,6 @@ export default function HomeScreen() {
       return `Las horas registradas son:\n${resumen}`;
     }
 
-    if (texto.includes("cuantas") || texto.includes("cantidad")) {
-      return `Hay ${meds.length} medicina${meds.length === 1 ? "" : "s"} registrada${meds.length === 1 ? "" : "s"}.`;
-    }
-
     const coincidencia = meds.find((med) =>
       normalizarTexto(med.nombre).includes(texto),
     );
@@ -358,62 +382,7 @@ export default function HomeScreen() {
       return `${coincidencia.nombre} se da a las ${coincidencia.hora}${coincidencia.descripcion ? ` y ${coincidencia.descripcion.toLowerCase()}` : ""}.`;
     }
 
-    return "Puedo ayudarte con preguntas como: ¿qué le estoy dando?, ¿a qué hora? o ¿cuántas medicinas hay?";
-  };
-
-  const responderConIA = async (pregunta: string): Promise<string> => {
-    if (!OPENAI_API_KEY) {
-      return responderPregunta(pregunta);
-    }
-
-    const contextoMedicinas = meds.length
-      ? meds
-          .map(
-            (med) =>
-              `${med.nombre} a las ${med.hora}${med.descripcion ? ` (${med.descripcion})` : ""}`,
-          )
-          .join("\n")
-      : "No hay medicinas registradas aún.";
-
-    try {
-      const response = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "Eres un asistente útil para cuidadores. Responde en español, de forma breve, clara y comprensible para personas mayores. Usa el contexto de medicinas cuando sea útil y evita dar indicaciones médicas peligrosas.",
-              },
-              {
-                role: "user",
-                content: `Pregunta del cuidador: ${pregunta}\n\nMedicinas registradas en la app:\n${contextoMedicinas}`,
-              },
-            ],
-            temperature: 0.5,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error("No se pudo contactar con la IA");
-      }
-
-      const data = await response.json();
-      return (
-        data.choices?.[0]?.message?.content?.trim() ||
-        responderPregunta(pregunta)
-      );
-    } catch (error) {
-      return `${responderPregunta(pregunta)}\n\n(La IA no estuvo disponible, así que se respondió con la información local.)`;
-    }
+    return "Puedo ayudarte con preguntas como: ¿qué le estoy dando? o ¿a qué hora?";
   };
 
   const enviarMensaje = async () => {
@@ -427,7 +396,8 @@ export default function HomeScreen() {
     setChatInput("");
     setIsChatLoading(true);
 
-    const respuesta = await responderConIA(texto);
+    const respuesta = responderPregunta(texto);
+
     setChatMessages((prev) => [
       ...prev,
       { id: Date.now() + 1, author: "bot", text: respuesta },
@@ -467,6 +437,14 @@ export default function HomeScreen() {
                     ? `⏳ Temporal · ${item.diasDuracion ?? 0} días`
                     : "♾️ Permanente"}
                 </Text>
+                {item.tipoCiclo === "temporal" && (
+                  <Text style={styles.medDetail}>
+                    ✅ {item.tomasCompletadas ?? 0} de{" "}
+                    {item.tomasTotales ??
+                      (item.diasDuracion ?? 0) * (item.vecesPorDia ?? 1)}{" "}
+                    tomas
+                  </Text>
+                )}
                 {!!item.descripcion && (
                   <Text style={styles.medDetail}>{item.descripcion}</Text>
                 )}
