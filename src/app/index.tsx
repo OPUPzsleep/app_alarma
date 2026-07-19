@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { removeAlarm, scheduleAlarm } from "expo-alarm-module";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
@@ -15,33 +16,25 @@ import {
 } from "react-native";
 import { styles } from "./estilos";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// La lista de alarmas nativas que tenemos programadas en este momento,
+// para poder limpiarlas todas antes de reprogramar (expo-alarm-module no
+// trae un "cancelar todas", así que lo llevamos nosotros).
+const ALARM_UIDS_KEY = "scheduled_alarm_uids";
 
-// Canal dedicado de máxima prioridad para Android: aparece encima de todo
-// (heads-up), se salta el modo Silencio/No molestar, y vibra de forma
-// insistente. Pensado para que no pase desapercibida en personas mayores.
-const CANAL_ALARMAS = "alarmas-medicinas";
-
-const configurarCanalDeAlarmas = async () => {
-  if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(CANAL_ALARMAS, {
-    name: "Alarmas de medicinas",
-    importance: Notifications.AndroidImportance.MAX,
-    sound: "alarma.mp3",
-    vibrationPattern: [0, 500, 250, 500, 250, 500, 250, 500],
-    lightColor: "#E8873A",
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    bypassDnd: true,
-    enableVibrate: true,
-  });
+const limpiarAlarmasAnteriores = async () => {
+  try {
+    const guardados = await AsyncStorage.getItem(ALARM_UIDS_KEY);
+    const uids: string[] = guardados ? JSON.parse(guardados) : [];
+    for (const uid of uids) {
+      try {
+        await removeAlarm(uid);
+      } catch {
+        // Puede que ya no exista, no pasa nada.
+      }
+    }
+  } catch {
+    // Sin datos previos, no hay nada que limpiar.
+  }
 };
 
 type TipoCiclo = "permanente" | "temporal";
@@ -165,7 +158,6 @@ export default function HomeScreen() {
       const saved = await loadMedications();
       setMeds(saved);
       await Notifications.requestPermissionsAsync();
-      await configurarCanalDeAlarmas();
       await sincronizarAlarmas(saved);
     };
     init();
@@ -184,40 +176,56 @@ export default function HomeScreen() {
   };
 
   const programarAlarma = async (
+    uid: string,
     nombreMedicina: string,
     descripcionMedicina: string,
     horaDeToma: Date,
   ) => {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "💊 ¡Es hora!",
-        body: descripcionMedicina
-          ? `${nombreMedicina} — ${descripcionMedicina}`
-          : `Debes de tomar esta pastilla: ${nombreMedicina}`,
-        sound: "alarma.mp3",
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: horaDeToma.getHours(),
-        minute: horaDeToma.getMinutes(),
-        repeats: true,
-        channelId: CANAL_ALARMAS,
-      },
-    });
+    // Si la hora ya pasó hoy, que la primera vez sea mañana (evita que
+    // suene inmediatamente al guardar).
+    const proximaHora = new Date(horaDeToma);
+    if (proximaHora.getTime() <= Date.now()) {
+      proximaHora.setDate(proximaHora.getDate() + 1);
+    }
+
+    await scheduleAlarm({
+      uid,
+      day: proximaHora,
+      title: `💊 ${nombreMedicina}`,
+      description: descripcionMedicina
+        ? `Debes tomar: ${nombreMedicina} — ${descripcionMedicina}`
+        : `Debes tomar: ${nombreMedicina}`,
+      showDismiss: true,
+      showSnooze: true,
+      snoozeInterval: 10,
+      repeating: true,
+      active: true,
+    } as any);
   };
 
   const sincronizarAlarmas = async (lista: Medicina[]) => {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await limpiarAlarmasAnteriores();
+    const nuevosUids: string[] = [];
+
     for (const med of lista) {
       if (med.tipoCiclo === "temporal" && med.fechaFin) {
         const fin = new Date(med.fechaFin);
         if (fin < new Date()) continue;
       }
 
-      for (const horaTexto of med.horas) {
-        await programarAlarma(med.nombre, med.descripcion, parsearHora(horaTexto));
+      for (let indice = 0; indice < med.horas.length; indice += 1) {
+        const uid = `alarma-${med.id}-${indice}`;
+        await programarAlarma(
+          uid,
+          med.nombre,
+          med.descripcion,
+          parsearHora(med.horas[indice]),
+        );
+        nuevosUids.push(uid);
       }
     }
+
+    await AsyncStorage.setItem(ALARM_UIDS_KEY, JSON.stringify(nuevosUids));
   };
 
   // La hora programada más reciente que ya debió sonar (hoy o, si aún no
