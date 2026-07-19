@@ -25,6 +25,25 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Canal dedicado de máxima prioridad para Android: aparece encima de todo
+// (heads-up), se salta el modo Silencio/No molestar, y vibra de forma
+// insistente. Pensado para que no pase desapercibida en personas mayores.
+const CANAL_ALARMAS = "alarmas-medicinas";
+
+const configurarCanalDeAlarmas = async () => {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(CANAL_ALARMAS, {
+    name: "Alarmas de medicinas",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: "alarma.mp3",
+    vibrationPattern: [0, 500, 250, 500, 250, 500, 250, 500],
+    lightColor: "#E8873A",
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    bypassDnd: true,
+    enableVibrate: true,
+  });
+};
+
 type TipoCiclo = "permanente" | "temporal";
 
 type Medicina = {
@@ -143,6 +162,7 @@ export default function HomeScreen() {
       const saved = await loadMedications();
       setMeds(saved);
       await Notifications.requestPermissionsAsync();
+      await configurarCanalDeAlarmas();
       await sincronizarAlarmas(saved);
     };
     init();
@@ -171,13 +191,14 @@ export default function HomeScreen() {
         body: descripcionMedicina
           ? `${nombreMedicina} — ${descripcionMedicina}`
           : `Debes de tomar esta pastilla: ${nombreMedicina}`,
-        sound: "default",
+        sound: "alarma.mp3",
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: horaDeToma.getHours(),
         minute: horaDeToma.getMinutes(),
         repeats: true,
+        channelId: CANAL_ALARMAS,
       },
     });
   };
