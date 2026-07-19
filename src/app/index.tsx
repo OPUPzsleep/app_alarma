@@ -134,28 +134,11 @@ export default function HomeScreen() {
     return normalizarMedicinas(JSON.parse(jsonValue) as Medicina[]);
   };
 
-  const segundosHastaHora = (hora: Date) => {
-    const ahora = new Date();
-    const objetivo = new Date();
-    objetivo.setHours(hora.getHours(), hora.getMinutes(), 0, 0);
-
-    if (objetivo.getTime() <= ahora.getTime()) {
-      objetivo.setDate(objetivo.getDate() + 1);
-    }
-
-    return Math.max(
-      1,
-      Math.round((objetivo.getTime() - ahora.getTime()) / 1000),
-    );
-  };
-
   const programarAlarma = async (
     nombreMedicina: string,
     descripcionMedicina: string,
-    foto: string | null,
-    hora: Date,
+    horaDeToma: Date,
   ) => {
-    const seconds = segundosHastaHora(hora);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "💊 ¡Es hora!",
@@ -165,9 +148,10 @@ export default function HomeScreen() {
         sound: "default",
       },
       trigger: {
-        seconds,
-        repeats: false,
-      } as any,
+        hour: horaDeToma.getHours(),
+        minute: horaDeToma.getMinutes(),
+        repeats: true,
+      } as Notifications.DailyTriggerInput,
     });
   };
 
@@ -185,12 +169,7 @@ export default function HomeScreen() {
       );
 
       for (const horaDeToma of horasDeToma) {
-        await programarAlarma(
-          med.nombre,
-          med.descripcion,
-          med.photo,
-          horaDeToma,
-        );
+        await programarAlarma(med.nombre, med.descripcion, horaDeToma);
       }
     }
   };
