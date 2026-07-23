@@ -1,12 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { removeAlarm, scheduleAlarm } from "expo-alarm-module";
+import { dismissAlarm, setAlarm, showAlarms } from "expo-alarm";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
 import {
     Alert,
     Image,
+    KeyboardAvoidingView,
     Platform,
     ScrollView,
     Text,
@@ -15,27 +16,6 @@ import {
     View,
 } from "react-native";
 import { styles } from "./estilos";
-
-// La lista de alarmas nativas que tenemos programadas en este momento,
-// para poder limpiarlas todas antes de reprogramar (expo-alarm-module no
-// trae un "cancelar todas", así que lo llevamos nosotros).
-const ALARM_UIDS_KEY = "scheduled_alarm_uids";
-
-const limpiarAlarmasAnteriores = async () => {
-  try {
-    const guardados = await AsyncStorage.getItem(ALARM_UIDS_KEY);
-    const uids: string[] = guardados ? JSON.parse(guardados) : [];
-    for (const uid of uids) {
-      try {
-        await removeAlarm(uid);
-      } catch {
-        // Puede que ya no exista, no pasa nada.
-      }
-    }
-  } catch {
-    // Sin datos previos, no hay nada que limpiar.
-  }
-};
 
 type TipoCiclo = "permanente" | "temporal";
 
@@ -158,7 +138,6 @@ export default function HomeScreen() {
       const saved = await loadMedications();
       setMeds(saved);
       await Notifications.requestPermissionsAsync();
-      await sincronizarAlarmas(saved);
     };
     init();
   }, []);
@@ -176,56 +155,49 @@ export default function HomeScreen() {
   };
 
   const programarAlarma = async (
-    uid: string,
     nombreMedicina: string,
     descripcionMedicina: string,
     horaDeToma: Date,
   ) => {
-    // Si la hora ya pasó hoy, que la primera vez sea mañana (evita que
-    // suene inmediatamente al guardar).
-    const proximaHora = new Date(horaDeToma);
-    if (proximaHora.getTime() <= Date.now()) {
-      proximaHora.setDate(proximaHora.getDate() + 1);
-    }
+    const mensaje = descripcionMedicina
+      ? `💊 ${nombreMedicina} — ${descripcionMedicina}`
+      : `💊 ${nombreMedicina}`;
 
-    await scheduleAlarm({
-      uid,
-      day: proximaHora,
-      title: `💊 ${nombreMedicina}`,
-      description: descripcionMedicina
-        ? `Debes tomar: ${nombreMedicina} — ${descripcionMedicina}`
-        : `Debes tomar: ${nombreMedicina}`,
-      showDismiss: true,
-      showSnooze: true,
-      snoozeInterval: 10,
-      repeating: true,
-      active: true,
+    await setAlarm({
+      hour: horaDeToma.getHours(),
+      minutes: horaDeToma.getMinutes(),
+      days: [1, 2, 3, 4, 5, 6, 7], // todos los días (Calendar: 1=domingo..7=sábado)
+      message: mensaje,
+      vibrate: true,
+      skipUi: true, // algunos relojes (como el de Samsung) lo ignoran y piden confirmar igual
     } as any);
   };
 
-  const sincronizarAlarmas = async (lista: Medicina[]) => {
-    await limpiarAlarmasAnteriores();
-    const nuevosUids: string[] = [];
-
-    for (const med of lista) {
-      if (med.tipoCiclo === "temporal" && med.fechaFin) {
-        const fin = new Date(med.fechaFin);
-        if (fin < new Date()) continue;
-      }
-
-      for (let indice = 0; indice < med.horas.length; indice += 1) {
-        const uid = `alarma-${med.id}-${indice}`;
-        await programarAlarma(
-          uid,
-          med.nombre,
-          med.descripcion,
-          parsearHora(med.horas[indice]),
-        );
-        nuevosUids.push(uid);
-      }
+  // Nota: el Reloj nativo de Android no permite que una app externa borre
+  // una alarma ya creada por seguridad. Si el usuario edita o elimina una
+  // medicina, esta función solo deja de crear NUEVAS alarmas para ella —
+  // las que ya existen en el Reloj hay que borrarlas ahí manualmente
+  // (por eso el botón "Abrir alarmas del Reloj").
+  const programarAlarmasDeMedicina = async (med: Medicina) => {
+    if (med.tipoCiclo === "temporal" && med.fechaFin) {
+      const fin = new Date(med.fechaFin);
+      if (fin < new Date()) return;
     }
 
-    await AsyncStorage.setItem(ALARM_UIDS_KEY, JSON.stringify(nuevosUids));
+    for (const horaTexto of med.horas) {
+      await programarAlarma(med.nombre, med.descripcion, parsearHora(horaTexto));
+    }
+  };
+
+  const abrirAlarmasDelSistema = async () => {
+    try {
+      await showAlarms({} as any);
+    } catch {
+      Alert.alert(
+        "No se pudo abrir",
+        "No pude abrir la app de Reloj. Ábrela manualmente para revisar o borrar alarmas.",
+      );
+    }
   };
 
   // La hora programada más reciente que ya debió sonar (hoy o, si aún no
@@ -270,6 +242,14 @@ export default function HomeScreen() {
 
     const ahoraISO = new Date().toISOString();
 
+    // Si la alarma nativa está sonando o pendiente en la bandeja, la
+    // detenemos aquí: confirmar desde la app también cuenta como "atendida".
+    try {
+      await dismissAlarm({} as any);
+    } catch {
+      // No había ninguna sonando, no pasa nada.
+    }
+
     if (med.tipoCiclo === "temporal") {
       const totalTomas =
         med.tomasTotales ?? (med.diasDuracion ?? 1) * (med.vecesPorDia ?? 1);
@@ -279,10 +259,9 @@ export default function HomeScreen() {
       if (tratamientoCompleto) {
         const nuevasMeds = meds.filter((m) => m.id !== id);
         await saveMedications(nuevasMeds);
-        await sincronizarAlarmas(nuevasMeds);
         Alert.alert(
           "¡Tratamiento completado!",
-          `Ya completaste las ${totalTomas} tomas de ${med.nombre}. Se eliminó de la lista.`,
+          `Ya completaste las ${totalTomas} tomas de ${med.nombre}. Se eliminó de la lista. Recuerda borrar su alarma desde la app Reloj si ya no la necesitas.`,
         );
         return;
       }
@@ -293,7 +272,6 @@ export default function HomeScreen() {
           : m,
       );
       await saveMedications(nuevasMeds);
-      await sincronizarAlarmas(nuevasMeds);
       Alert.alert(
         "¡Bien hecho!",
         `Toma ${tomasActuales} de ${totalTomas} registrada.`,
@@ -305,7 +283,6 @@ export default function HomeScreen() {
       m.id === id ? { ...m, ultimaTomaEn: ahoraISO } : m,
     );
     await saveMedications(nuevasMeds);
-    await sincronizarAlarmas(nuevasMeds);
     Alert.alert(
       "¡Bien hecho!",
       "Se registró la toma y la medicina permanente sigue en la lista.",
@@ -318,7 +295,7 @@ export default function HomeScreen() {
 
     Alert.alert(
       "Eliminar medicina",
-      `¿Seguro que quieres eliminar "${med.nombre}"? También se cancelan sus alarmas.`,
+      `¿Seguro que quieres eliminar "${med.nombre}"? La app ya no la mostrará, pero si le creaste una alarma en el Reloj, esa hay que borrarla ahí manualmente.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -327,7 +304,6 @@ export default function HomeScreen() {
           onPress: async () => {
             const nuevasMeds = meds.filter((m) => m.id !== id);
             await saveMedications(nuevasMeds);
-            await sincronizarAlarmas(nuevasMeds);
           },
         },
       ],
@@ -424,21 +400,32 @@ export default function HomeScreen() {
 
     await saveMedications(listaActualizada);
 
+    const horasCambiaron =
+      !medicinaAnterior ||
+      medicinaAnterior.horas.length !== medData.horas.length ||
+      medicinaAnterior.horas.some((h, i) => h !== medData.horas[i]);
+
     let avisoAlarma = `La alarma sonará a las ${medData.horas
       .map((h) => formatearHoraVisual(parsearHora(h)))
       .join(", ")}.`;
 
-    try {
-      await sincronizarAlarmas(listaActualizada);
-    } catch (error) {
+    if (horasCambiaron) {
+      try {
+        await programarAlarmasDeMedicina(medData);
+        if (editingId) {
+          avisoAlarma =
+            "Se creó una alarma nueva con el horario actualizado. Si el horario anterior ya no sirve, bórralo desde la app Reloj para que no suenen las dos.";
+        }
+      } catch (error) {
+        avisoAlarma =
+          "Se guardó la medicina, pero hubo un problema al crear la alarma en el Reloj. Revisa que la app tenga permiso.";
+      }
+    } else {
       avisoAlarma =
-        "Se guardó la medicina, pero hubo un problema al programar la notificación. Revisa que le diste permiso de notificaciones a la app.";
+        "Se actualizaron los datos. El horario no cambió, así que no se tocó la alarma existente en el Reloj.";
     }
 
-    Alert.alert(
-      "Éxito",
-      editingId ? `Se actualizó la alarma para ${medData.nombre}.` : avisoAlarma,
-    );
+    Alert.alert("Éxito", avisoAlarma);
     limpiarFormulario();
     setActiveTab("home");
   };
@@ -514,7 +501,11 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>💊 Mis Medicinas</Text>
         <Text style={styles.headerSubtitle}>
@@ -525,6 +516,14 @@ export default function HomeScreen() {
       <ScrollView style={styles.content}>
         {activeTab === "home" && (
           <View style={styles.view}>
+            <TouchableOpacity
+              style={[styles.btnSecondary, { marginBottom: 16 }]}
+              onPress={abrirAlarmasDelSistema}
+            >
+              <Text style={styles.btnSecondaryText}>
+                ⏰ Abrir alarmas del Reloj
+              </Text>
+            </TouchableOpacity>
             {meds.length === 0 && (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyBoxText}>
@@ -841,6 +840,6 @@ export default function HomeScreen() {
           <Text style={styles.navIcon}>💬</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
