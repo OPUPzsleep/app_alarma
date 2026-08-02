@@ -17,6 +17,18 @@ import {
 } from "react-native";
 import { styles } from "./estilos";
 
+// Sin esto, Android no muestra la alerta ni reproduce el sonido cuando la
+// notificación llega con la app abierta en primer plano.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 type TipoCiclo = "permanente" | "temporal";
 
 type Medicina = {
@@ -97,7 +109,10 @@ const normalizarMedicinas = (lista: Medicina[]) => {
 // Canal dedicado de máxima prioridad para Android: aparece encima de todo
 // (heads-up), se salta el modo Silencio/No molestar, y vibra de forma
 // insistente. Pensado para que no pase desapercibida en personas mayores.
-const CANAL_ALARMAS = "alarmas-medicinas";
+// El "-v2" es a propósito: Android congela el sonido/vibración de un canal
+// la primera vez que se crea y ya no los actualiza, así que un ID nuevo
+// garantiza un canal limpio en vez de heredar uno viejo mal configurado.
+const CANAL_ALARMAS = "alarmas-medicinas-v2";
 
 // Categoría con los botones que aparecen sobre la notificación: aplazar
 // (le da tiempo a la persona) o confirmar que ya la tomó, sin tener que
