@@ -15,19 +15,9 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import ExpoMedAlarm from "../../modules/expo-med-alarm/src/ExpoMedAlarmModule";
+import type { AlarmActionData } from "../../modules/expo-med-alarm/src/ExpoMedAlarm.types";
 import { styles } from "./estilos";
-
-// Sin esto, Android no muestra la alerta ni reproduce el sonido cuando la
-// notificación llega con la app abierta en primer plano.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
 
 type TipoCiclo = "permanente" | "temporal";
 
@@ -106,111 +96,53 @@ const normalizarMedicinas = (lista: Medicina[]) => {
   });
 };
 
-// Canal dedicado de máxima prioridad para Android: aparece encima de todo
-// (heads-up), se salta el modo Silencio/No molestar, y vibra de forma
-// insistente. Pensado para que no pase desapercibida en personas mayores.
-// El "-v2" es a propósito: Android congela el sonido/vibración de un canal
-// la primera vez que se crea y ya no los actualiza, así que un ID nuevo
-// garantiza un canal limpio en vez de heredar uno viejo mal configurado.
-const CANAL_ALARMAS = "alarmas-medicinas-v2";
-
-// Categoría con los botones que aparecen sobre la notificación: aplazar
-// (le da tiempo a la persona) o confirmar que ya la tomó, sin tener que
-// buscar nada dentro de la app.
-const CATEGORIA_TOMA = "confirmar-toma";
-
 // Cuántas veces se vuelve a insistir tras aplazar antes de dejar de sonar.
 const MAX_APLAZOS = 3;
 const SEGUNDOS_APLAZO = 120;
 
-const configurarCanalDeAlarmas = async () => {
-  if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(CANAL_ALARMAS, {
-    name: "Alarmas de medicinas",
-    importance: Notifications.AndroidImportance.MAX,
-    sound: "alarma.mp3",
-    vibrationPattern: [0, 500, 250, 500, 250, 500, 250, 500],
-    lightColor: "#E8873A",
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    bypassDnd: true,
-    enableVibrate: true,
-  });
-};
+// Máximo de tomas al día que permite el formulario (ver actualizarVecesPorDia),
+// así que alcanza para cancelar cualquier horaIndex que haya existido.
+const MAX_HORAS_POR_DIA = 6;
 
-const configurarCategoriaDeToma = async () => {
-  await Notifications.setNotificationCategoryAsync(CATEGORIA_TOMA, [
-    {
-      identifier: "aplazar",
-      buttonTitle: "🚶 La voy a tomar",
-      options: { opensAppToForeground: true },
-    },
-    {
-      identifier: "tomada",
-      buttonTitle: "✅ Ya la tomé",
-      options: { opensAppToForeground: true },
-    },
-  ]);
-};
+const tituloYCuerpo = (med: Medicina) => ({
+  title: "💊 ¡Es hora de tu medicina!",
+  body: med.descripcion ? `${med.nombre} — ${med.descripcion}` : med.nombre,
+});
 
-const idAlarma = (medId: number, horaIndex: number) => `alarma-${medId}-${horaIndex}`;
-
-const programarAlarma = async (med: Medicina, horaIndex: number) => {
+const programarAlarma = (med: Medicina, horaIndex: number) => {
   const hora = parsearHora(med.horas[horaIndex]);
-  await Notifications.scheduleNotificationAsync({
-    identifier: idAlarma(med.id, horaIndex),
-    content: {
-      title: "💊 ¡Es hora de tu medicina!",
-      body: med.descripcion ? `${med.nombre} — ${med.descripcion}` : med.nombre,
-      sound: "alarma.mp3",
-      categoryIdentifier: CATEGORIA_TOMA,
-      data: { medId: med.id, horaIndex, intentos: 0 },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: hora.getHours(),
-      minute: hora.getMinutes(),
-      channelId: CANAL_ALARMAS,
-    },
-  });
+  const { title, body } = tituloYCuerpo(med);
+  ExpoMedAlarm.scheduleAlarm(med.id, horaIndex, hora.getHours(), hora.getMinutes(), title, body);
 };
 
-const sincronizarAlarmas = async (lista: Medicina[]) => {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+const sincronizarAlarmas = (lista: Medicina[]) => {
+  // Se cancelan todos los horarios posibles de cada medicina antes de
+  // reprogramar, para no dejar alarmas viejas si se editaron o redujeron
+  // las horas de toma.
+  for (const med of lista) {
+    for (let indice = 0; indice < MAX_HORAS_POR_DIA; indice += 1) {
+      ExpoMedAlarm.cancelAlarm(med.id, indice);
+    }
+  }
+
   for (const med of lista) {
     if (med.tipoCiclo === "temporal" && med.fechaFin) {
       const fin = new Date(med.fechaFin);
       if (fin < new Date()) continue;
     }
     for (let indice = 0; indice < med.horas.length; indice += 1) {
-      await programarAlarma(med, indice);
+      programarAlarma(med, indice);
     }
   }
 };
 
-// Reprograma un aviso para dentro de unos minutos cuando la persona pide más
-// tiempo ("La voy a tomar"). Tras MAX_APLAZOS veces sin confirmar se deja de
-// insistir para no generar una alarma infinita.
-const idAplazo = (medId: number, horaIndex: number, intentos: number) =>
-  `${idAlarma(medId, horaIndex)}-aplazo-${intentos}`;
-
-const aplazarToma = async (med: Medicina, horaIndex: number, intentos: number) => {
+// Reprograma un aviso único (no diario) para dentro de unos minutos cuando la
+// persona pide más tiempo ("La voy a tomar"). Tras MAX_APLAZOS veces sin
+// confirmar se deja de insistir para no generar una alarma infinita.
+const aplazarToma = (med: Medicina, horaIndex: number, intentos: number) => {
   if (intentos > MAX_APLAZOS) return;
-
-  await Notifications.scheduleNotificationAsync({
-    identifier: idAplazo(med.id, horaIndex, intentos),
-    content: {
-      title: "💊 ¿Ya tomaste tu medicina?",
-      body: med.descripcion ? `${med.nombre} — ${med.descripcion}` : med.nombre,
-      sound: "alarma.mp3",
-      categoryIdentifier: CATEGORIA_TOMA,
-      data: { medId: med.id, horaIndex, intentos },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: SEGUNDOS_APLAZO,
-      channelId: CANAL_ALARMAS,
-    },
-  });
+  const { title, body } = tituloYCuerpo(med);
+  ExpoMedAlarm.scheduleAplazo(med.id, horaIndex, intentos, SEGUNDOS_APLAZO, title, body);
 };
 
 export default function HomeScreen() {
@@ -263,31 +195,29 @@ export default function HomeScreen() {
     const init = async () => {
       const saved = await loadMedications();
       setMeds(saved);
+      // Necesario para que Android 13+ deje mostrar la notificación de la
+      // alarma (incluida la del servicio en primer plano que la hace sonar).
       await Notifications.requestPermissionsAsync();
-      await configurarCanalDeAlarmas();
-      await configurarCategoriaDeToma();
-      await sincronizarAlarmas(saved);
+      sincronizarAlarmas(saved);
     };
     init();
   }, []);
 
-  // Procesa tanto el toque en el cuerpo de la notificación como los botones
-  // "Aplazar"/"Ya la tomé", sin importar si la app estaba abierta, en
-  // segundo plano o recién se abrió por esta notificación.
-  const procesarNotificacion = async (
-    data: Record<string, unknown> | undefined,
-    actionId: string,
-  ) => {
-    const medId = Number(data?.medId);
+  // Procesa tanto el toque en el cuerpo de la alarma como los botones
+  // "La voy a tomar"/"Ya la tomé", sin importar si la app estaba abierta, en
+  // segundo plano o recién se abrió por la alarma. Lo primero que hace es
+  // apagar la vibración/sonido en curso.
+  const procesarAccionAlarma = async (datos: AlarmActionData) => {
+    ExpoMedAlarm.stopRinging();
+
+    const { medId, horaIndex, intentos, accion } = datos;
     if (!medId) return;
-    const horaIndex = Number(data?.horaIndex ?? 0);
-    const intentos = Number(data?.intentos ?? 0);
 
     const listaActual = await loadMedications();
     const med = listaActual.find((m) => m.id === medId);
     if (!med) return;
 
-    if (actionId === "tomada") {
+    if (accion === "tomada") {
       await marcarComoTomada(med.id);
       setConfirmacion({
         med,
@@ -295,8 +225,8 @@ export default function HomeScreen() {
         intentos,
         mensaje: "✅ ¡Registrado! Bien hecho.",
       });
-    } else if (actionId === "aplazar") {
-      await aplazarToma(med, horaIndex, intentos + 1);
+    } else if (accion === "aplazar") {
+      aplazarToma(med, horaIndex, intentos + 1);
       setConfirmacion({
         med,
         horaIndex,
@@ -309,21 +239,13 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    const suscripcion = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        procesarNotificacion(
-          response.notification.request.content.data,
-          response.actionIdentifier,
-        );
-      },
-    );
+    const datosDeInicio = ExpoMedAlarm.getLaunchAlarmData();
+    if (datosDeInicio) {
+      procesarAccionAlarma(datosDeInicio);
+    }
 
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (!response) return;
-      procesarNotificacion(
-        response.notification.request.content.data,
-        response.actionIdentifier,
-      );
+    const suscripcion = ExpoMedAlarm.addListener("onAlarmAction", (datos) => {
+      procesarAccionAlarma(datos);
     });
 
     return () => suscripcion.remove();
@@ -372,16 +294,10 @@ export default function HomeScreen() {
   // Si había avisos de "¿ya la tomaste?" programados por un aplazo, se
   // cancelan al confirmar para que no vuelvan a sonar preguntando algo que
   // ya se contestó.
-  const cancelarAplazosPendientes = async (med: Medicina) => {
+  const cancelarAplazosPendientes = (med: Medicina) => {
     for (let indice = 0; indice < med.horas.length; indice += 1) {
       for (let intentos = 1; intentos <= MAX_APLAZOS; intentos += 1) {
-        try {
-          await Notifications.cancelScheduledNotificationAsync(
-            idAplazo(med.id, indice, intentos),
-          );
-        } catch {
-          // Puede que ese aplazo no exista, no pasa nada.
-        }
+        ExpoMedAlarm.cancelAplazo(med.id, indice, intentos);
       }
     }
   };
@@ -391,7 +307,7 @@ export default function HomeScreen() {
     const med = listaActual.find((m) => m.id === id);
     if (!med) return;
 
-    await cancelarAplazosPendientes(med);
+    cancelarAplazosPendientes(med);
 
     if (yaTomadaEnEsteTurno(med)) {
       Alert.alert(
@@ -456,12 +372,9 @@ export default function HomeScreen() {
           style: "destructive",
           onPress: async () => {
             for (let indice = 0; indice < med.horas.length; indice += 1) {
-              try {
-                await Notifications.cancelScheduledNotificationAsync(
-                  idAlarma(id, indice),
-                );
-              } catch {
-                // Puede que ya no exista, no pasa nada.
+              ExpoMedAlarm.cancelAlarm(id, indice);
+              for (let intentos = 1; intentos <= MAX_APLAZOS; intentos += 1) {
+                ExpoMedAlarm.cancelAplazo(id, indice, intentos);
               }
             }
             const nuevasMeds = meds.filter((m) => m.id !== id);
@@ -1038,9 +951,9 @@ export default function HomeScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.btnSecondary, { marginTop: 10 }]}
-                  onPress={async () => {
+                  onPress={() => {
                     if (!confirmacion) return;
-                    await aplazarToma(
+                    aplazarToma(
                       confirmacion.med,
                       confirmacion.horaIndex,
                       confirmacion.intentos + 1,

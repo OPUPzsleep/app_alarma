@@ -22,7 +22,8 @@
       "Bash(npx expo *)",
       "Bash(git commit -m ' *)",
       "Bash(ls -la \"C:\\\\Users\\\\jcanc\\\\OneDrive\\\\Desktop\\\\alarma.mp3\" 2>&1; echo \"---project file---\"; ls -la \"C:\\\\Users\\\\jcanc\\\\OneDrive\\\\Desktop\\\\app_alarma-main\\\\app_alarma-main\\\\src\\\\assets\\\\sounds\\\\alarma.mp3\" 2>&1)",
-      "Bash(xargs grep -ln \"sound\")"
+      "Bash(xargs grep -ln \"sound\")",
+      "Bash(npx expo-modules-autolinking *)"
     ]
   }
 }
