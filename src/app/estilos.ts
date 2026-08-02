@@ -314,4 +314,37 @@ export const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(30, 43, 41, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  confirmCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    alignItems: "center",
+  },
+  confirmPhoto: {
+    width: 180,
+    height: 180,
+    borderRadius: 18,
+    marginBottom: 16,
+  },
+  confirmNombre: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: COLORS.tealDark,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  confirmMensaje: {
+    fontSize: 16,
+    color: COLORS.inkSoft,
+    textAlign: "center",
+    marginVertical: 16,
+  },
 });
