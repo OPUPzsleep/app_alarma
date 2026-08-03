@@ -12,8 +12,8 @@ import androidx.core.content.ContextCompat
  */
 class AlarmReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
-    val medId = intent.getIntExtra(AlarmConstants.EXTRA_MED_ID, -1)
-    if (medId == -1) return
+    val medId = intent.getLongExtra(AlarmConstants.EXTRA_MED_ID, -1L)
+    if (medId == -1L) return
 
     val horaIndex = intent.getIntExtra(AlarmConstants.EXTRA_HORA_INDEX, 0)
     val intentos = intent.getIntExtra(AlarmConstants.EXTRA_INTENTOS, 0)

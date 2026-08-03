@@ -15,13 +15,13 @@ import java.util.Calendar
 object AlarmScheduler {
   // Namespace de requestCode separado del de la alarma diaria, para que un
   // aplazo nunca pise el PendingIntent de la alarma principal.
-  private fun requestCodeAplazo(medId: Int, horaIndex: Int, intentos: Int): Int =
+  private fun requestCodeAplazo(medId: Long, horaIndex: Int, intentos: Int): Int =
     AlarmConstants.requestCode(medId, horaIndex) * 100 + 50 + intentos
 
   private fun crearPendingIntent(
     context: Context,
     requestCode: Int,
-    medId: Int,
+    medId: Long,
     horaIndex: Int,
     intentos: Int,
     hour: Int,
@@ -49,7 +49,7 @@ object AlarmScheduler {
   /** Alarma diaria recurrente (la hora normal de la medicina). */
   fun arm(
     context: Context,
-    medId: Int,
+    medId: Long,
     horaIndex: Int,
     hour: Int,
     minute: Int,
@@ -72,7 +72,7 @@ object AlarmScheduler {
     alarmManager.setAlarmClock(info, pendingIntent)
   }
 
-  fun cancel(context: Context, medId: Int, horaIndex: Int) {
+  fun cancel(context: Context, medId: Long, horaIndex: Int) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val requestCode = AlarmConstants.requestCode(medId, horaIndex)
     val pendingIntent = crearPendingIntent(context, requestCode, medId, horaIndex, 0, 0, 0, "", "")
@@ -87,7 +87,7 @@ object AlarmScheduler {
    */
   fun armAplazo(
     context: Context,
-    medId: Int,
+    medId: Long,
     horaIndex: Int,
     intentos: Int,
     delaySeconds: Int,
@@ -102,7 +102,7 @@ object AlarmScheduler {
     alarmManager.setAlarmClock(info, pendingIntent)
   }
 
-  fun cancelAplazo(context: Context, medId: Int, horaIndex: Int, intentos: Int) {
+  fun cancelAplazo(context: Context, medId: Long, horaIndex: Int, intentos: Int) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val requestCode = requestCodeAplazo(medId, horaIndex, intentos)
     val pendingIntent = crearPendingIntent(context, requestCode, medId, horaIndex, intentos, -1, -1, "", "")

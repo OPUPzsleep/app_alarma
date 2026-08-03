@@ -18,7 +18,9 @@ object AlarmConstants {
 
   const val CHANNEL_ID = "alarmas-medicinas-nativas"
 
-  // horaIndex siempre es < 10 (máximo 6 tomas por día), así que esta
-  // combinación es única por medicina+horario sin necesitar más estado.
-  fun requestCode(medId: Int, horaIndex: Int): Int = medId * 10 + horaIndex
+  // medId es un Date.now() de JS (13 dígitos), no entra en un Int de 32 bits,
+  // así que se combina con hashCode() (mezcla los 64 bits en 32) en vez de
+  // multiplicar directo, para que el requestCode de PendingIntent siga
+  // siendo un Int válido y estable por medicina+horario.
+  fun requestCode(medId: Long, horaIndex: Int): Int = medId.hashCode() * 10 + horaIndex
 }

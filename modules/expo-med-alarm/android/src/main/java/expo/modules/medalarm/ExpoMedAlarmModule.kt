@@ -12,7 +12,7 @@ class ExpoMedAlarmModule : Module() {
     Events("onAlarmAction")
 
     Function("scheduleAlarm") {
-      medId: Int,
+      medId: Long,
       horaIndex: Int,
       hour: Int,
       minute: Int,
@@ -23,13 +23,13 @@ class ExpoMedAlarmModule : Module() {
       AlarmScheduler.arm(context, medId, horaIndex, hour, minute, title, body)
     }
 
-    Function("cancelAlarm") { medId: Int, horaIndex: Int ->
+    Function("cancelAlarm") { medId: Long, horaIndex: Int ->
       val context = appContext.reactContext ?: return@Function
       AlarmScheduler.cancel(context, medId, horaIndex)
     }
 
     Function("scheduleAplazo") {
-      medId: Int,
+      medId: Long,
       horaIndex: Int,
       intentos: Int,
       delaySeconds: Int,
@@ -40,7 +40,7 @@ class ExpoMedAlarmModule : Module() {
       AlarmScheduler.armAplazo(context, medId, horaIndex, intentos, delaySeconds, title, body)
     }
 
-    Function("cancelAplazo") { medId: Int, horaIndex: Int, intentos: Int ->
+    Function("cancelAplazo") { medId: Long, horaIndex: Int, intentos: Int ->
       val context = appContext.reactContext ?: return@Function
       AlarmScheduler.cancelAplazo(context, medId, horaIndex, intentos)
     }
@@ -66,11 +66,11 @@ class ExpoMedAlarmModule : Module() {
   }
 
   private fun extraerDatos(intent: Intent?): Bundle? {
-    val medId = intent?.getIntExtra(AlarmConstants.EXTRA_MED_ID, -1) ?: -1
-    if (medId == -1) return null
+    val medId = intent?.getLongExtra(AlarmConstants.EXTRA_MED_ID, -1L) ?: -1L
+    if (medId == -1L) return null
 
     return Bundle().apply {
-      putInt("medId", medId)
+      putLong("medId", medId)
       putInt("horaIndex", intent?.getIntExtra(AlarmConstants.EXTRA_HORA_INDEX, 0) ?: 0)
       putInt("intentos", intent?.getIntExtra(AlarmConstants.EXTRA_INTENTOS, 0) ?: 0)
       putString(

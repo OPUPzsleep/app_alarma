@@ -45,7 +45,7 @@ class AlarmRingService : Service() {
       return START_NOT_STICKY
     }
 
-    val medId = intent?.getIntExtra(AlarmConstants.EXTRA_MED_ID, -1) ?: -1
+    val medId = intent?.getLongExtra(AlarmConstants.EXTRA_MED_ID, -1L) ?: -1L
     val horaIndex = intent?.getIntExtra(AlarmConstants.EXTRA_HORA_INDEX, 0) ?: 0
     val intentos = intent?.getIntExtra(AlarmConstants.EXTRA_INTENTOS, 0) ?: 0
     val title = intent?.getStringExtra(AlarmConstants.EXTRA_TITLE) ?: "💊 ¡Es hora de tu medicina!"
@@ -61,7 +61,7 @@ class AlarmRingService : Service() {
   }
 
   private fun construirNotificacion(
-    medId: Int,
+    medId: Long,
     horaIndex: Int,
     intentos: Int,
     title: String,
@@ -112,7 +112,7 @@ class AlarmRingService : Service() {
   }
 
   private fun crearActivityPendingIntent(
-    medId: Int,
+    medId: Long,
     horaIndex: Int,
     intentos: Int,
     accion: String,
