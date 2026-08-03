@@ -3,7 +3,10 @@ package expo.modules.medalarm
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.content.ContextCompat
+
+private const val TAG = "ExpoMedAlarm"
 
 /**
  * Recibe el disparo de AlarmManager a la hora exacta. Arranca el servicio que
@@ -13,6 +16,7 @@ import androidx.core.content.ContextCompat
 class AlarmReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     val medId = intent.getLongExtra(AlarmConstants.EXTRA_MED_ID, -1L)
+    Log.d(TAG, "AlarmReceiver.onReceive medId=$medId")
     if (medId == -1L) return
 
     val horaIndex = intent.getIntExtra(AlarmConstants.EXTRA_HORA_INDEX, 0)

@@ -4,7 +4,10 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import java.util.Calendar
+
+private const val TAG = "ExpoMedAlarm"
 
 /**
  * Programa la alarma con AlarmManager.setAlarmClock: es la misma API que usan
@@ -69,7 +72,16 @@ object AlarmScheduler {
     val requestCode = AlarmConstants.requestCode(medId, horaIndex)
     val pendingIntent = crearPendingIntent(context, requestCode, medId, horaIndex, 0, hour, minute, title, body)
     val info = AlarmManager.AlarmClockInfo(calendar.timeInMillis, pendingIntent)
-    alarmManager.setAlarmClock(info, pendingIntent)
+    try {
+      alarmManager.setAlarmClock(info, pendingIntent)
+      Log.d(
+        TAG,
+        "arm() OK medId=$medId horaIndex=$horaIndex requestCode=$requestCode trigger=${calendar.time}",
+      )
+    } catch (e: Exception) {
+      Log.e(TAG, "arm() FALLÓ medId=$medId horaIndex=$horaIndex requestCode=$requestCode", e)
+      throw e
+    }
   }
 
   fun cancel(context: Context, medId: Long, horaIndex: Int) {

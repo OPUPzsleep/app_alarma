@@ -2,8 +2,11 @@ package expo.modules.medalarm
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+
+private const val TAG = "ExpoMedAlarm"
 
 class ExpoMedAlarmModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -19,7 +22,11 @@ class ExpoMedAlarmModule : Module() {
       title: String,
       body: String,
       ->
-      val context = appContext.reactContext ?: return@Function
+      Log.d(TAG, "JS llamó scheduleAlarm medId=$medId horaIndex=$horaIndex hour=$hour minute=$minute")
+      val context = appContext.reactContext ?: run {
+        Log.e(TAG, "scheduleAlarm: reactContext es null")
+        return@Function
+      }
       AlarmScheduler.arm(context, medId, horaIndex, hour, minute, title, body)
     }
 

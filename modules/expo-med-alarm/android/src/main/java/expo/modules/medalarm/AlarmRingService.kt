@@ -17,7 +17,10 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
+
+private const val TAG = "ExpoMedAlarm"
 
 /**
  * Servicio en primer plano que hace sonar y vibrar la alarma de forma
@@ -39,6 +42,8 @@ class AlarmRingService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    Log.d(TAG, "AlarmRingService.onStartCommand action=${intent?.action}")
+
     if (intent?.action == AlarmConstants.ACTION_STOP_RINGING) {
       detenerTodo()
       stopSelf()
@@ -51,11 +56,16 @@ class AlarmRingService : Service() {
     val title = intent?.getStringExtra(AlarmConstants.EXTRA_TITLE) ?: "💊 ¡Es hora de tu medicina!"
     val body = intent?.getStringExtra(AlarmConstants.EXTRA_BODY) ?: ""
 
-    startForeground(NOTIFICATION_ID, construirNotificacion(medId, horaIndex, intentos, title, body))
-    iniciarVibracion()
-    iniciarSonido()
-    adquirirWakeLock()
-    programarAutoStop()
+    try {
+      startForeground(NOTIFICATION_ID, construirNotificacion(medId, horaIndex, intentos, title, body))
+      iniciarVibracion()
+      iniciarSonido()
+      adquirirWakeLock()
+      programarAutoStop()
+      Log.d(TAG, "AlarmRingService arrancó OK medId=$medId horaIndex=$horaIndex")
+    } catch (e: Exception) {
+      Log.e(TAG, "AlarmRingService.onStartCommand FALLÓ medId=$medId", e)
+    }
 
     return START_REDELIVER_INTENT
   }
