@@ -1,7 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as DocumentPicker from "expo-document-picker";
+import { File, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
+import * as Sharing from "expo-sharing";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -387,6 +390,123 @@ export default function HomeScreen() {
     );
   };
 
+  // Exporta la lista completa (incluidas las fotos, convertidas a base64
+  // para que el archivo sea autocontenido) a un JSON que se comparte por
+  // el menú nativo del celular, para poder restaurarlo en otro teléfono.
+  const exportarDatos = async () => {
+    try {
+      const listaActual = await loadMedications();
+      const medicinasExportables = listaActual.map((med) => {
+        if (!med.photo) return med;
+        try {
+          const fotoFile = new File(med.photo);
+          if (!fotoFile.exists) return { ...med, photo: null };
+          const base64 = fotoFile.base64Sync();
+          return { ...med, photo: `data:image/jpeg;base64,${base64}` };
+        } catch {
+          return { ...med, photo: null };
+        }
+      });
+
+      const contenido = JSON.stringify(
+        { app: "mis-medicinas", version: 1, medicinas: medicinasExportables },
+        null,
+        2,
+      );
+
+      const archivo = new File(Paths.cache, "mis-medicinas-backup.json");
+      if (archivo.exists) archivo.delete();
+      archivo.create();
+      archivo.write(contenido);
+
+      const disponible = await Sharing.isAvailableAsync();
+      if (!disponible) {
+        Alert.alert("No disponible", "Este dispositivo no puede compartir archivos.");
+        return;
+      }
+      await Sharing.shareAsync(archivo.uri, {
+        mimeType: "application/json",
+        dialogTitle: "Compartir respaldo de Mis Medicinas",
+      });
+    } catch (error) {
+      Alert.alert("Error", "No se pudo generar el respaldo.");
+    }
+  };
+
+  // Lee un JSON exportado desde este mismo botón (en este celular o en
+  // otro) y deja elegir si agregar esas medicinas a las actuales o
+  // reemplazar la lista entera.
+  const importarDatos = async () => {
+    const resultado = await DocumentPicker.getDocumentAsync({
+      type: "application/json",
+      copyToCacheDirectory: true,
+    });
+    if (resultado.canceled || !resultado.assets?.[0]) return;
+
+    try {
+      const archivo = new File(resultado.assets[0].uri);
+      const contenido = await archivo.text();
+      const datos = JSON.parse(contenido);
+      const listaImportada: Medicina[] = Array.isArray(datos)
+        ? datos
+        : (datos.medicinas ?? []);
+
+      if (listaImportada.length === 0) {
+        Alert.alert("Archivo vacío", "No se encontraron medicinas en ese archivo.");
+        return;
+      }
+
+      const listaConFotosLocales = listaImportada.map((med) => {
+        if (!med.photo || !med.photo.startsWith("data:")) return med;
+        try {
+          const base64 = med.photo.split(",")[1];
+          const nuevaFoto = new File(Paths.document, `medicina-${med.id}-${Date.now()}.jpg`);
+          nuevaFoto.create();
+          nuevaFoto.write(base64, { encoding: "base64" });
+          return { ...med, photo: nuevaFoto.uri };
+        } catch {
+          return { ...med, photo: null };
+        }
+      });
+
+      Alert.alert(
+        "Importar respaldo",
+        `Se encontraron ${listaConFotosLocales.length} medicina(s) en el archivo. ¿Qué querés hacer?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Agregar a las actuales",
+            onPress: async () => {
+              const combinada = [...meds, ...listaConFotosLocales];
+              await saveMedications(combinada);
+              sincronizarAlarmas(combinada);
+              Alert.alert("Listo", "Medicinas importadas.");
+            },
+          },
+          {
+            text: "Reemplazar todo",
+            style: "destructive",
+            onPress: async () => {
+              for (const med of meds) {
+                for (let indice = 0; indice < MAX_HORAS_POR_DIA; indice += 1) {
+                  ExpoMedAlarm.cancelAlarm(med.id, indice);
+                }
+              }
+              await saveMedications(listaConFotosLocales);
+              sincronizarAlarmas(listaConFotosLocales);
+              Alert.alert("Listo", "Medicinas importadas.");
+            },
+          },
+        ],
+      );
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        "No se pudo leer el archivo. Asegurate de que sea un respaldo válido de Mis Medicinas.",
+      );
+    }
+  };
+
   const tomarFoto = async () => {
     const { granted } = await ImagePicker.requestCameraPermissionsAsync();
     if (!granted) return Alert.alert("Error", "Permiso de cámara denegado");
@@ -582,6 +702,20 @@ export default function HomeScreen() {
       <ScrollView style={styles.content}>
         {activeTab === "home" && (
           <View style={styles.view}>
+            <View style={[styles.buttonRow, { marginBottom: 16, marginTop: 0 }]}>
+              <TouchableOpacity
+                style={[styles.btnSecondary, styles.smallButton]}
+                onPress={exportarDatos}
+              >
+                <Text style={styles.btnSecondaryText}>📤 Exportar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnSecondary, styles.smallButton]}
+                onPress={importarDatos}
+              >
+                <Text style={styles.btnSecondaryText}>📥 Importar</Text>
+              </TouchableOpacity>
+            </View>
             {meds.length === 0 && (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyBoxText}>
