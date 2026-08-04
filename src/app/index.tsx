@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ExpoMedAlarm from "../../modules/expo-med-alarm/src/ExpoMedAlarmModule";
 import type { AlarmActionData } from "../../modules/expo-med-alarm/src/ExpoMedAlarm.types";
 import { styles } from "./estilos";
@@ -146,6 +147,7 @@ const aplazarToma = (med: Medicina, horaIndex: number, intentos: number) => {
 };
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<"home" | "add" | "chat">("home");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [meds, setMeds] = useState<Medicina[]>([]);
@@ -887,7 +889,7 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: 12 + insets.bottom }]}>
         <TouchableOpacity
           style={styles.navBtn}
           onPress={() => setActiveTab("home")}
