@@ -2,11 +2,11 @@
   "expo": {
     "name": "mi-primera-app",
     "slug": "mi-primera-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/icon.png",
     "scheme": "miprimeraapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./src/assets/expo.icon"
     },
@@ -18,10 +18,7 @@
         "monochromeImage": "./src/assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.miprimeraapp",
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "package": "com.anonymous.miprimeraapp"
     },
     "web": {
       "output": "static",
@@ -40,7 +37,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "La aplicación necesita acceso a la cámara para tomar fotos de las medicinas."
+          "cameraPermission": "La aplicación necesita acceso a la cámara para tomar fotos de las medicinas.",
+          "microphonePermission": false
         }
       ],
       [
@@ -52,7 +50,8 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-sharing"
+      "expo-sharing",
+      "@react-native-vector-icons/ionicons"
     ],
     "experiments": {
       "typedRoutes": true,

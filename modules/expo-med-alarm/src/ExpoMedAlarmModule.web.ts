@@ -27,6 +27,17 @@ class ExpoMedAlarmModule extends NativeModule<ExpoMedAlarmModuleEvents> {
   getLaunchAlarmData(): AlarmActionData | null {
     return null;
   }
+  canScheduleExactAlarms(): boolean {
+    return true;
+  }
+  requestExactAlarmPermission(): void {}
+  isIgnoringBatteryOptimizations(): boolean {
+    return true;
+  }
+  requestIgnoreBatteryOptimizations(): void {}
+  areNotificationsEnabled(): boolean {
+    return true;
+  }
 }
 
 export default registerWebModule(ExpoMedAlarmModule, "ExpoMedAlarmModule");

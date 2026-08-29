@@ -23,6 +23,11 @@ declare class ExpoMedAlarmModule extends NativeModule<ExpoMedAlarmModuleEvents> 
   cancelAplazo(medId: number, horaIndex: number, intentos: number): void;
   stopRinging(): void;
   getLaunchAlarmData(): AlarmActionData | null;
+  canScheduleExactAlarms(): boolean;
+  requestExactAlarmPermission(): void;
+  isIgnoringBatteryOptimizations(): boolean;
+  requestIgnoreBatteryOptimizations(): void;
+  areNotificationsEnabled(): boolean;
 }
 
 export default requireNativeModule<ExpoMedAlarmModule>("ExpoMedAlarm");

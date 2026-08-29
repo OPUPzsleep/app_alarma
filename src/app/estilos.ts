@@ -1,17 +1,5 @@
 import { StyleSheet } from "react-native";
-
-const COLORS = {
-  bg: "#F5F3ED",
-  card: "#FFFFFF",
-  ink: "#1E2B29",
-  inkSoft: "#4C5A57",
-  teal: "#0F5C56",
-  tealDark: "#0A413D",
-  amber: "#E8873A",
-  amberDark: "#C96A20",
-  green: "#3F7D5C",
-  line: "#E1DDD1",
-};
+import { COLORS, FONT_SIZES, TOUCH } from "@/constants/design-tokens";
 
 export const styles = StyleSheet.create({
   container: {
@@ -32,32 +20,58 @@ export const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 10,
   },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   headerTitle: {
     color: "#fff",
-    fontSize: 24,
+    fontSize: FONT_SIZES.screenTitle,
     fontWeight: "bold",
     marginBottom: 6,
   },
   headerSubtitle: {
     color: "#DDEFEA",
-    fontSize: 15,
+    fontSize: FONT_SIZES.small,
   },
   content: {
     flex: 1,
   },
   view: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   medName: {
-    fontSize: 18,
+    fontSize: FONT_SIZES.medName,
     fontWeight: "bold",
     color: COLORS.tealDark,
     marginVertical: 4,
   },
   medDetail: {
     color: COLORS.inkSoft,
-    fontSize: 14,
+    fontSize: FONT_SIZES.medDetail,
+    marginTop: 2,
+  },
+  medDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    minHeight: 48,
+  },
+  cardExpandedSection: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.line,
+    borderStyle: "dashed",
   },
   emptyBox: {
     backgroundColor: COLORS.card,
@@ -71,7 +85,8 @@ export const styles = StyleSheet.create({
   emptyBoxText: {
     color: COLORS.inkSoft,
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 24,
+    fontSize: FONT_SIZES.helperText,
   },
   formCard: {
     backgroundColor: COLORS.card,
@@ -83,6 +98,7 @@ export const styles = StyleSheet.create({
   },
   label: {
     fontWeight: "bold",
+    fontSize: FONT_SIZES.formLabel,
     color: COLORS.inkSoft,
     marginBottom: 6,
     marginTop: 14,
@@ -93,9 +109,15 @@ export const styles = StyleSheet.create({
     borderColor: COLORS.line,
     borderRadius: 14,
     padding: 16,
-    fontSize: 17,
+    fontSize: FONT_SIZES.formLabel,
     color: COLORS.ink,
-    minHeight: 54,
+    minHeight: TOUCH.input,
+  },
+  errorText: {
+    color: COLORS.amberDark,
+    fontSize: FONT_SIZES.helperText,
+    marginTop: 6,
+    fontWeight: "600",
   },
   optionRow: {
     flexDirection: "row",
@@ -104,6 +126,8 @@ export const styles = StyleSheet.create({
   },
   optionButton: {
     flex: 1,
+    flexDirection: "row",
+    gap: 8,
     borderWidth: 1.5,
     borderColor: COLORS.line,
     borderRadius: 14,
@@ -111,7 +135,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F9F7F1",
-    minHeight: 56,
+    minHeight: TOUCH.button,
   },
   optionButtonActive: {
     backgroundColor: COLORS.teal,
@@ -120,6 +144,7 @@ export const styles = StyleSheet.create({
   optionButtonText: {
     color: COLORS.inkSoft,
     fontWeight: "bold",
+    fontSize: FONT_SIZES.formLabel,
   },
   optionButtonTextActive: {
     color: "#fff",
@@ -133,56 +158,39 @@ export const styles = StyleSheet.create({
     flex: 1,
     marginTop: 0,
     marginBottom: 0,
-    minHeight: 56,
+    minHeight: TOUCH.button,
   },
   btnPrimary: {
+    flexDirection: "row",
+    gap: 8,
     backgroundColor: COLORS.teal,
     borderRadius: 16,
     padding: 18,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 20,
-    minHeight: 56,
+    minHeight: TOUCH.button,
   },
   btnPrimaryText: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 17,
-  },
-  bottomNav: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderColor: COLORS.line,
-    paddingBottom: 20,
-    paddingTop: 10,
-    shadowColor: COLORS.ink,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  navBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 6,
-    minHeight: 52,
-  },
-  navIcon: {
-    fontSize: 28,
-    marginBottom: 4,
+    fontSize: FONT_SIZES.button,
   },
   photoPreview: {
     width: "100%",
-    height: 180,
+    height: 260,
     borderRadius: 14,
     marginTop: 10,
   },
+  medPhoto: {
+    width: "100%",
+    height: 220,
+    borderRadius: 14,
+    marginVertical: 10,
+  },
   btnSecondary: {
+    flexDirection: "row",
+    gap: 8,
     backgroundColor: COLORS.card,
     borderColor: COLORS.teal,
     borderWidth: 2,
@@ -193,12 +201,12 @@ export const styles = StyleSheet.create({
     width: "100%",
     marginTop: 10,
     marginBottom: 16,
-    minHeight: 56,
+    minHeight: TOUCH.button,
   },
   btnSecondaryText: {
     color: COLORS.teal,
     fontWeight: "bold",
-    fontSize: 17,
+    fontSize: FONT_SIZES.button,
   },
   btnDangerWrapper: {
     marginTop: 24,
@@ -208,26 +216,27 @@ export const styles = StyleSheet.create({
     borderStyle: "dashed",
   },
   btnDanger: {
+    flexDirection: "row",
+    gap: 8,
     backgroundColor: COLORS.card,
-    borderColor: "#C0392B",
+    borderColor: COLORS.red,
     borderWidth: 2,
     borderRadius: 16,
     padding: 15,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 52,
+    minHeight: TOUCH.button,
   },
   btnDangerText: {
-    color: "#C0392B",
+    color: COLORS.red,
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: FONT_SIZES.button - 2,
   },
   helperText: {
     color: COLORS.inkSoft,
-    fontSize: 13,
+    fontSize: FONT_SIZES.helperText,
     marginTop: 6,
-    lineHeight: 18,
-    fontStyle: "italic",
+    lineHeight: 21,
   },
   btnDisabled: {
     backgroundColor: "#F0EEE7",
@@ -246,17 +255,18 @@ export const styles = StyleSheet.create({
     minHeight: 420,
   },
   chatTitle: {
-    fontSize: 18,
+    fontSize: FONT_SIZES.medName,
     fontWeight: "bold",
     color: COLORS.tealDark,
   },
   chatSubtitle: {
     color: COLORS.inkSoft,
+    fontSize: FONT_SIZES.helperText,
     marginTop: 4,
     marginBottom: 12,
   },
   chatMessages: {
-    maxHeight: 300,
+    maxHeight: 340,
     marginBottom: 12,
   },
   chatBubble: {
@@ -276,8 +286,8 @@ export const styles = StyleSheet.create({
   },
   chatBubbleText: {
     color: COLORS.ink,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: FONT_SIZES.chat,
+    lineHeight: 23,
   },
   chatBubbleTextUser: {
     color: "#fff",
@@ -290,29 +300,32 @@ export const styles = StyleSheet.create({
   chatStatus: {
     marginTop: 8,
     color: COLORS.inkSoft,
-    fontSize: 13,
+    fontSize: FONT_SIZES.helperText,
   },
   chatInput: {
     flex: 1,
-    minHeight: 46,
-    maxHeight: 100,
+    minHeight: 50,
+    maxHeight: 120,
     borderWidth: 1.5,
     borderColor: COLORS.line,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: "#fff",
+    fontSize: FONT_SIZES.chat,
   },
   chatSendButton: {
     backgroundColor: COLORS.teal,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     justifyContent: "center",
+    minHeight: TOUCH.input,
   },
   chatSendButtonText: {
     color: "#fff",
     fontWeight: "bold",
+    fontSize: FONT_SIZES.formLabel,
   },
   confirmOverlay: {
     flex: 1,
@@ -329,22 +342,191 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   confirmPhoto: {
-    width: 180,
-    height: 180,
+    width: "100%",
+    height: 280,
     borderRadius: 18,
     marginBottom: 16,
   },
   confirmNombre: {
-    fontSize: 22,
+    fontSize: FONT_SIZES.medName,
     fontWeight: "bold",
     color: COLORS.tealDark,
     textAlign: "center",
     marginBottom: 4,
   },
   confirmMensaje: {
-    fontSize: 16,
+    fontSize: FONT_SIZES.formLabel,
     color: COLORS.inkSoft,
     textAlign: "center",
     marginVertical: 16,
+  },
+
+  // Fila de acción por horario (una por cada toma del día de una medicina)
+  doseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F9F7F1",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    gap: 10,
+  },
+  doseRowTime: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  doseRowTimeText: {
+    fontSize: FONT_SIZES.medDetail,
+    color: COLORS.ink,
+    fontWeight: "600",
+  },
+  doseRowButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 2,
+    borderColor: COLORS.teal,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 48,
+  },
+  doseRowButtonDone: {
+    borderColor: COLORS.green,
+    backgroundColor: COLORS.greenBg,
+  },
+  doseRowButtonText: {
+    color: COLORS.teal,
+    fontWeight: "bold",
+    fontSize: FONT_SIZES.helperText,
+  },
+  doseRowButtonTextDone: {
+    color: COLORS.green,
+  },
+
+  // Insignia de stock bajo
+  stockBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.amberBg,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginTop: 8,
+  },
+  stockBadgeText: {
+    color: COLORS.amberDark,
+    fontWeight: "bold",
+    fontSize: FONT_SIZES.helperText,
+  },
+
+  // Banner de aviso (permisos, estado del sistema)
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: COLORS.amberBg,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 14,
+  },
+  bannerOk: {
+    backgroundColor: COLORS.greenBg,
+  },
+  bannerText: {
+    flex: 1,
+    color: COLORS.amberDark,
+    fontSize: FONT_SIZES.helperText,
+    lineHeight: 20,
+  },
+  bannerTextOk: {
+    color: COLORS.green,
+  },
+  bannerButton: {
+    backgroundColor: COLORS.amberDark,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  bannerButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: FONT_SIZES.helperText,
+  },
+
+  // Pantalla de Ajustes/Ayuda
+  sectionTitle: {
+    fontSize: FONT_SIZES.medName,
+    fontWeight: "bold",
+    color: COLORS.tealDark,
+    marginBottom: 8,
+  },
+  paragraph: {
+    color: COLORS.ink,
+    fontSize: FONT_SIZES.helperText,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  settingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.line,
+  },
+  settingsRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  settingsRowLabel: {
+    fontSize: FONT_SIZES.medDetail,
+    color: COLORS.ink,
+    flexShrink: 1,
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  // Historial de tomas
+  historyDayTitle: {
+    fontSize: FONT_SIZES.formLabel,
+    fontWeight: "bold",
+    color: COLORS.tealDark,
+    marginTop: 18,
+    marginBottom: 6,
+  },
+  historyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    padding: 12,
+    marginBottom: 8,
+  },
+  historyItemTitle: {
+    fontSize: FONT_SIZES.medDetail,
+    color: COLORS.ink,
+    fontWeight: "600",
+  },
+  historyItemSubtitle: {
+    fontSize: FONT_SIZES.helperText,
+    color: COLORS.inkSoft,
+    marginTop: 2,
   },
 });
