@@ -50,7 +50,27 @@ export const parsearHora = (hora: string) => {
   return fecha;
 };
 
-export const horasLegibles = (med: Medicina) =>
+// Intervalos típicos de toma. Todos dividen 24, así que las horas calculadas
+// se repiten igual cada día.
+export const INTERVALOS_HORAS = [6, 8, 12, 24] as const;
+
+export const calcularHorasPorIntervalo = (primera: Date, intervaloHoras: number): Date[] =>
+  Array.from({ length: Math.round(24 / intervaloHoras) }, (_, i) => {
+    const fecha = new Date(primera);
+    fecha.setHours(primera.getHours() + i * intervaloHoras);
+    return fecha;
+  });
+
+// Al editar: si las horas guardadas están separadas exactamente por uno de los
+// intervalos típicos, se reconoce; si no, se trata como horario personalizado.
+export const detectarIntervalo = (horas: string[]): number | null => {
+  const intervalo = 24 / horas.length;
+  if (!(INTERVALOS_HORAS as readonly number[]).includes(intervalo)) return null;
+  const esperadas = calcularHorasPorIntervalo(parsearHora(horas[0]), intervalo).map(formatearHora);
+  return esperadas.every((h, i) => h === horas[i]) ? intervalo : null;
+};
+
+export const horasLegibles =(med: Medicina) =>
   med.horas.map((h) => formatearHoraVisual(parsearHora(h))).join(", ");
 
 export const normalizarTexto = (texto: string) =>
@@ -162,8 +182,28 @@ export const yaTomadaEnEsteTurno = (med: Medicina, horaIndex: number): boolean =
 export const stockBajo = (med: Medicina): boolean =>
   med.stockActual != null && med.stockUmbralAviso != null && med.stockActual <= med.stockUmbralAviso;
 
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+export const calcularFechaFin = (inicio: Date, dias: number) =>
+  new Date(inicio.getTime() + dias * MS_POR_DIA);
+
+// Días de calendario entre hoy y la fecha de fin (0 = termina hoy). Se cuenta
+// por días y no por milisegundos para que "faltan 2 días" no cambie a media tarde.
+const diasCalendarioHasta = (fin: Date): number => {
+  const inicioDia = (f: Date) => new Date(f.getFullYear(), f.getMonth(), f.getDate()).getTime();
+  return Math.max(0, Math.round((inicioDia(fin) - inicioDia(new Date())) / MS_POR_DIA));
+};
+
 export const diasRestantes = (med: Medicina): number | null => {
   if (med.tipoCiclo !== "temporal" || !med.fechaFin) return null;
-  const ms = new Date(med.fechaFin).getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+  return diasCalendarioHasta(new Date(med.fechaFin));
+};
+
+// Ej. "Termina el jueves 2 de octubre · faltan 5 días"
+export const textoFinTratamiento = (fin: Date): string => {
+  const dias = diasCalendarioHasta(fin);
+  if (dias === 0) return "Termina hoy";
+  if (dias === 1) return "Termina mañana";
+  const fecha = fin.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
+  return `Termina el ${fecha} · faltan ${dias} días`;
 };

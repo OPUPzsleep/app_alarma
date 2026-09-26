@@ -1,8 +1,8 @@
 import { Image, Modal, Text, TouchableOpacity, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { COLORS } from "@/constants/design-tokens";
 import { Medicina } from "@/services/medicine-model";
+import { useStyles } from "@/context/font-scale-provider";
 
 export type Confirmacion = {
   med: Medicina;
@@ -24,6 +24,7 @@ export function ConfirmDoseModal({
   onYaLaTome,
   onAplazar,
 }: ConfirmDoseModalProps) {
+  const styles = useStyles();
   return (
     <Modal visible={!!confirmacion} transparent animationType="fade" onRequestClose={onCerrar}>
       <View style={styles.confirmOverlay} accessibilityViewIsModal>

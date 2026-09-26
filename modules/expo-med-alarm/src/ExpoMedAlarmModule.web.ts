@@ -1,6 +1,6 @@
 import { registerWebModule, NativeModule } from "expo";
 
-import { AlarmActionData, ExpoMedAlarmModuleEvents } from "./ExpoMedAlarm.types";
+import { AccionPendiente, AlarmActionData, ExpoMedAlarmModuleEvents } from "./ExpoMedAlarm.types";
 
 // La alarma nativa (vibración/sonido en bucle) no existe en web; se dejan
 // no-ops para que el mismo código de la app no rompa el bundle web.
@@ -26,6 +26,9 @@ class ExpoMedAlarmModule extends NativeModule<ExpoMedAlarmModuleEvents> {
   stopRinging(): void {}
   getLaunchAlarmData(): AlarmActionData | null {
     return null;
+  }
+  takePendingActions(): AccionPendiente[] {
+    return [];
   }
   canScheduleExactAlarms(): boolean {
     return true;

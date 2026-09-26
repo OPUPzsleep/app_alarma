@@ -2,15 +2,24 @@ import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { PermissionBanner } from "@/components/permission-banner";
 import { COLORS } from "@/constants/design-tokens";
 import { useMedicines } from "@/context/medicines-provider";
 import { useAlarmPermissions } from "@/hooks/use-alarm-permissions";
 import { seleccionarArchivoDeRespaldo } from "@/services/export-import";
+import {
+  ESCALA_MAX,
+  ESCALA_MIN,
+  ESCALA_PASO,
+  useFontScale,
+  useStyles,
+} from "@/context/font-scale-provider";
 
 export default function AjustesScreen() {
+  const styles = useStyles();
+  const { escala, cambiarEscala } = useFontScale();
+  const porcentaje = Math.round(escala * 100);
   const { exportar, agregarImportadas, reemplazarTodas } = useMedicines();
   const { alarmaExacta, bateria, notificaciones, solicitarAlarmaExacta, solicitarExencionBateria } =
     useAlarmPermissions();
@@ -19,7 +28,10 @@ export default function AjustesScreen() {
     try {
       await exportar();
     } catch (error) {
-      Alert.alert("Error", error instanceof Error ? error.message : "No se pudo generar el respaldo.");
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "No se pudo generar el respaldo.",
+      );
     }
   };
 
@@ -84,24 +96,65 @@ export default function AjustesScreen() {
       <ScrollView style={styles.content}>
         <View style={styles.view}>
           <View style={styles.formCard}>
+            <Text style={styles.sectionTitle}>Tamaño de letra</Text>
+            <Text style={styles.paragraph}>Toca el % para volver al tamaño normal.</Text>
+            <View style={styles.optionRow}>
+              <TouchableOpacity
+                style={[styles.optionButton, escala <= ESCALA_MIN && styles.btnDisabled]}
+                onPress={() => cambiarEscala(escala - ESCALA_PASO)}
+                disabled={escala <= ESCALA_MIN}
+                accessibilityRole="button"
+                accessibilityLabel="Letra más pequeña"
+              >
+                <Text style={styles.optionButtonText}>A−</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={() => cambiarEscala(1)}
+                accessibilityRole="button"
+                accessibilityLabel={`Tamaño actual ${porcentaje} por ciento. Tocar para volver al tamaño normal`}
+              >
+                <Text style={styles.optionButtonText}>{porcentaje}%</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.optionButton, escala >= ESCALA_MAX && styles.btnDisabled]}
+                onPress={() => cambiarEscala(escala + ESCALA_PASO)}
+                disabled={escala >= ESCALA_MAX}
+                accessibilityRole="button"
+                accessibilityLabel="Letra más grande"
+              >
+                <Text
+                  style={[
+                    styles.optionButtonText,
+                    { fontSize: styles.optionButtonText.fontSize * 1.3 },
+                  ]}
+                >
+                  A+
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.formCard}>
             <Text style={styles.sectionTitle}>¿Cómo funciona la app?</Text>
             <Text style={styles.paragraph}>
               1. En la pestaña Agregar escribes el nombre de tu medicina y a qué hora la tomas.
             </Text>
             <Text style={styles.paragraph}>
-              2. Cuando llegue la hora, el celular sonará y vibrará fuerte, aunque la app esté cerrada.
+              2. Cuando llegue la hora, el celular sonará y vibrará fuerte, aunque la app esté
+              cerrada.
             </Text>
             <Text style={styles.paragraph}>
-              3. En la pantalla de la alarma tocas “Ya la tomé” si ya la tomaste, o “La voy a tomar” si
-              necesitas un par de minutos más.
+              3. En la pantalla de la alarma tocas “Ya la tomé” si ya la tomaste, o “La voy a tomar”
+              si necesitas un par de minutos más.
             </Text>
             <Text style={styles.paragraph}>
-              4. “Permanente” quiere decir que suena todos los días para siempre. “Temporal” quiere decir
-              que se detiene sola cuando terminan los días de tratamiento.
+              4. “Permanente” quiere decir que suena todos los días para siempre. “Temporal” quiere
+              decir que se detiene sola cuando terminan los días de tratamiento.
             </Text>
             <Text style={styles.paragraph}>
-              5. En la pestaña Inicio puedes ver todas tus medicinas y marcar una toma sin esperar la
-              alarma.
+              5. En la pestaña Inicio puedes ver todas tus medicinas y marcar una toma sin esperar
+              la alarma.
             </Text>
           </View>
 
@@ -124,8 +177,8 @@ export default function AjustesScreen() {
             />
             {(!alarmaExacta || !bateria || !notificaciones) && (
               <Text style={styles.helperText}>
-                Si algo está en naranja, toca “Activar” y sigue las instrucciones en Ajustes del celular
-                para que las alarmas nunca fallen.
+                Si algo está en naranja, toca “Activar” y sigue las instrucciones en Ajustes del
+                celular para que las alarmas nunca fallen.
               </Text>
             )}
           </View>

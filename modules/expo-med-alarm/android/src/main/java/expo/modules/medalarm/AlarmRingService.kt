@@ -80,8 +80,8 @@ class AlarmRingService : Service() {
     crearCanalSiHaceFalta()
 
     val abrirIntent = crearActivityPendingIntent(medId, horaIndex, intentos, AlarmConstants.ACCION_ABRIR)
-    val aplazarIntent = crearActivityPendingIntent(medId, horaIndex, intentos, AlarmConstants.ACCION_APLAZAR)
-    val tomadaIntent = crearActivityPendingIntent(medId, horaIndex, intentos, AlarmConstants.ACCION_TOMADA)
+    val aplazarIntent = crearAccionPendingIntent(medId, horaIndex, intentos, AlarmConstants.ACCION_APLAZAR, title, body)
+    val tomadaIntent = crearAccionPendingIntent(medId, horaIndex, intentos, AlarmConstants.ACCION_TOMADA, title, body)
 
     val iconRes = resources.getIdentifier("notification_icon", "drawable", packageName)
       .takeIf { it != 0 } ?: applicationInfo.icon
@@ -145,6 +145,33 @@ class AlarmRingService : Service() {
       this,
       AlarmConstants.requestCode(medId, horaIndex) * 10 + accionOffset,
       launchIntent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+  }
+
+  // Los botones van a un BroadcastReceiver (no a la Activity) para que
+  // funcionen aunque el sistema no deje abrir la app desde segundo plano.
+  private fun crearAccionPendingIntent(
+    medId: Long,
+    horaIndex: Int,
+    intentos: Int,
+    accion: String,
+    title: String,
+    body: String,
+  ): PendingIntent {
+    val intent = Intent(this, AlarmActionReceiver::class.java).apply {
+      putExtra(AlarmConstants.EXTRA_MED_ID, medId)
+      putExtra(AlarmConstants.EXTRA_HORA_INDEX, horaIndex)
+      putExtra(AlarmConstants.EXTRA_INTENTOS, intentos)
+      putExtra(AlarmConstants.EXTRA_ACCION, accion)
+      putExtra(AlarmConstants.EXTRA_TITLE, title)
+      putExtra(AlarmConstants.EXTRA_BODY, body)
+    }
+    val accionOffset = if (accion == AlarmConstants.ACCION_APLAZAR) 1 else 2
+    return PendingIntent.getBroadcast(
+      this,
+      AlarmConstants.requestCode(medId, horaIndex) * 10 + accionOffset,
+      intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
   }

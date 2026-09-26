@@ -1,7 +1,7 @@
 import { Text, TouchableOpacity, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { COLORS } from "@/constants/design-tokens";
+import { useStyles } from "@/context/font-scale-provider";
 
 type PermissionBannerProps = {
   label: string;
@@ -10,6 +10,7 @@ type PermissionBannerProps = {
 };
 
 export function PermissionBanner({ label, ok, onActivar }: PermissionBannerProps) {
+  const styles = useStyles();
   return (
     <View style={[styles.banner, ok && styles.bannerOk]}>
       <Icon

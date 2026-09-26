@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { COLORS } from "@/constants/design-tokens";
 import { cargarHistorial, EntradaHistorial } from "@/services/history";
 import { formatearHoraVisual, parsearHora } from "@/services/medicine-model";
+import { useStyles } from "@/context/font-scale-provider";
 
 const formatearFechaLarga = (iso: string) =>
   new Date(iso).toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" });
 
 export default function HistorialScreen() {
+  const styles = useStyles();
   const [entradas, setEntradas] = useState<EntradaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
 

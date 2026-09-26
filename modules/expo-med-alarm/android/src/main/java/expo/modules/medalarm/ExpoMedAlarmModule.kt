@@ -18,7 +18,20 @@ class ExpoMedAlarmModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExpoMedAlarm")
 
-    Events("onAlarmAction")
+    Events("onAlarmAction", "onPendingActions")
+
+    OnCreate {
+      PendingActions.alAgregar = { sendEvent("onPendingActions", Bundle()) }
+    }
+
+    OnDestroy {
+      PendingActions.alAgregar = null
+    }
+
+    Function("takePendingActions") {
+      val context = appContext.reactContext ?: return@Function emptyList<Map<String, Any>>()
+      PendingActions.tomarTodas(context)
+    }
 
     Function("scheduleAlarm") {
       medId: Long,

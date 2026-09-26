@@ -13,19 +13,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { COLORS } from "@/constants/design-tokens";
 import { useMedicines } from "@/context/medicines-provider";
 import {
+  calcularFechaFin,
+  calcularHorasPorIntervalo,
   clamp,
+  detectarIntervalo,
   formatearHora,
   formatearHoraVisual,
+  INTERVALOS_HORAS,
   MAX_HORAS_POR_DIA,
   Medicina,
   parsearHora,
+  textoFinTratamiento,
   TipoCiclo,
 } from "@/services/medicine-model";
+import { useStyles } from "@/context/font-scale-provider";
 
 export default function AgregarScreen() {
   const { editingId } = useLocalSearchParams<{ editingId?: string }>();
@@ -36,6 +41,7 @@ export default function AgregarScreen() {
 }
 
 function MedicineForm({ editingId }: { editingId?: string }) {
+  const styles = useStyles();
   const { medicinas, guardarMedicina } = useMedicines();
   const medicinaAnterior = editingId
     ? medicinas.find((m) => m.id === Number(editingId))
@@ -49,8 +55,17 @@ function MedicineForm({ editingId }: { editingId?: string }) {
       ? medicinaAnterior.horas.map(parsearHora)
       : [new Date()],
   );
+  // null = horario personalizado (cada hora se elige a mano).
+  const [intervalo, setIntervalo] = useState<number | null>(() =>
+    medicinaAnterior && medicinaAnterior.horas.length > 0
+      ? detectarIntervalo(medicinaAnterior.horas)
+      : 24,
+  );
+  const [verOtrasTomas, setVerOtrasTomas] = useState(false);
   const [pickerIndexActivo, setPickerIndexActivo] = useState<number | null>(null);
-  const [tipoCiclo, setTipoCiclo] = useState<TipoCiclo>(medicinaAnterior?.tipoCiclo ?? "permanente");
+  const [tipoCiclo, setTipoCiclo] = useState<TipoCiclo>(
+    medicinaAnterior?.tipoCiclo ?? "permanente",
+  );
   const [duracionDias, setDuracionDias] = useState(
     medicinaAnterior?.diasDuracion ? String(medicinaAnterior.diasDuracion) : "7",
   );
@@ -62,11 +77,26 @@ function MedicineForm({ editingId }: { editingId?: string }) {
     medicinaAnterior?.stockUmbralAviso != null ? String(medicinaAnterior.stockUmbralAviso) : "",
   );
 
+  // Al editar un tratamiento temporal, los días se siguen contando desde que
+  // empezó (antes se contaban desde la edición y el tratamiento se alargaba).
+  // Si recién pasa de permanente a temporal, empieza a contar desde ahora.
+  const [inicioTratamiento] = useState(() =>
+    medicinaAnterior?.tipoCiclo === "temporal"
+      ? new Date(medicinaAnterior.fechaInicio)
+      : new Date(),
+  );
+  const diasNumero = Number(duracionDias);
+  const finPrevisto =
+    Number.isInteger(diasNumero) && diasNumero >= 1
+      ? calcularFechaFin(inicioTratamiento, diasNumero)
+      : null;
+
   const limpiarFormulario = () => {
     setNombre("");
     setDescripcion("");
     setPhotoUri(null);
     setHorasSeleccionadas([new Date()]);
+    setIntervalo(24);
     setTipoCiclo("permanente");
     setDuracionDias("7");
     setVecesPorDia("1");
@@ -82,6 +112,14 @@ function MedicineForm({ editingId }: { editingId?: string }) {
       while (nuevas.length < cantidadSugerida) nuevas.push(new Date());
       return nuevas.slice(0, cantidadSugerida);
     });
+  };
+
+  const elegirIntervalo = (nuevo: number | null) => {
+    setIntervalo(nuevo);
+    if (nuevo != null) {
+      setVecesPorDia(String(24 / nuevo));
+      setHorasSeleccionadas((prev) => calcularHorasPorIntervalo(prev[0], nuevo));
+    }
   };
 
   const tomarFoto = async () => {
@@ -147,10 +185,10 @@ function MedicineForm({ editingId }: { editingId?: string }) {
       stockUmbralAviso = Math.floor(valor);
     }
 
-    const fechaInicio = medicinaAnterior?.fechaInicio ?? new Date().toISOString();
+    const fechaInicio = inicioTratamiento.toISOString();
     const fechaFin =
       tipoCiclo === "temporal" && dias != null
-        ? new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString()
+        ? calcularFechaFin(inicioTratamiento, dias).toISOString()
         : null;
 
     const medData: Medicina = {
@@ -201,9 +239,13 @@ function MedicineForm({ editingId }: { editingId?: string }) {
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
           <Icon name="add-circle" size={26} color="#fff" />
-          <Text style={styles.headerTitle}>{editingId ? "Editar medicina" : "Agregar medicina"}</Text>
+          <Text style={styles.headerTitle}>
+            {editingId ? "Editar medicina" : "Agregar medicina"}
+          </Text>
         </View>
-        <Text style={styles.headerSubtitle}>Completa los datos y guarda para programar la alarma.</Text>
+        <Text style={styles.headerSubtitle}>
+          Completa los datos y guarda para programar la alarma.
+        </Text>
       </View>
 
       <ScrollView style={styles.content}>
@@ -230,7 +272,10 @@ function MedicineForm({ editingId }: { editingId?: string }) {
             <Text style={styles.label}>Ciclo de la alarma</Text>
             <View style={styles.optionRow}>
               <TouchableOpacity
-                style={[styles.optionButton, tipoCiclo === "permanente" && styles.optionButtonActive]}
+                style={[
+                  styles.optionButton,
+                  tipoCiclo === "permanente" && styles.optionButtonActive,
+                ]}
                 onPress={() => setTipoCiclo("permanente")}
                 accessibilityRole="button"
                 accessibilityLabel="Ciclo permanente"
@@ -287,38 +332,141 @@ function MedicineForm({ editingId }: { editingId?: string }) {
                   onChangeText={setDuracionDias}
                   accessibilityLabel="Días de tratamiento"
                 />
+                {finPrevisto && (
+                  <Text style={styles.helperText}>{textoFinTratamiento(finPrevisto)}</Text>
+                )}
               </View>
             )}
 
-            <Text style={styles.label}>Veces al día</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ej. 2"
-              keyboardType="number-pad"
-              value={vecesPorDia}
-              onChangeText={actualizarVecesPorDia}
-              accessibilityLabel="Veces al día"
-            />
+            <Text style={styles.label}>¿Cada cuántas horas?</Text>
+            <View style={[styles.optionRow, styles.optionRowWrap]}>
+              {INTERVALOS_HORAS.map((h) => (
+                <TouchableOpacity
+                  key={h}
+                  style={[
+                    styles.optionButton,
+                    styles.optionButtonHalf,
+                    intervalo === h && styles.optionButtonActive,
+                  ]}
+                  onPress={() => elegirIntervalo(h)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Cada ${h} horas, ${24 / h} ${h === 24 ? "vez" : "veces"} al día`}
+                >
+                  <Text
+                    style={[
+                      styles.optionButtonText,
+                      intervalo === h && styles.optionButtonTextActive,
+                    ]}
+                  >
+                    Cada {h} h
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { flexBasis: "100%" },
+                  intervalo === null && styles.optionButtonActive,
+                ]}
+                onPress={() => elegirIntervalo(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Otro horario, elegir cada hora a mano"
+              >
+                <Text
+                  style={[
+                    styles.optionButtonText,
+                    intervalo === null && styles.optionButtonTextActive,
+                  ]}
+                >
+                  Otro horario
+                </Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.helperText}>
-              Escribe cuántas veces al día se toma (de 1 a {MAX_HORAS_POR_DIA}). Abajo va a aparecer un
-              reloj para poner la hora exacta de cada toma.
+              {intervalo != null
+                ? `${24 / intervalo} ${intervalo === 24 ? "vez" : "veces"} al día. Elige la hora de la primera toma y las demás se calculan solas.`
+                : "Escribe cuántas veces al día se toma y elige la hora de cada toma."}
             </Text>
 
-            {horasSeleccionadas.map((hora, index) => (
-              <View key={index}>
+            {intervalo === null && (
+              <>
+                <Text style={styles.label}>Veces al día</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej. 2"
+                  keyboardType="number-pad"
+                  value={vecesPorDia}
+                  onChangeText={actualizarVecesPorDia}
+                  accessibilityLabel="Veces al día"
+                />
+                <Text style={styles.helperText}>De 1 a {MAX_HORAS_POR_DIA}.</Text>
+              </>
+            )}
+
+            {intervalo != null ? (
+              <>
                 <Text style={styles.label}>
-                  {horasSeleccionadas.length > 1 ? `Hora — Toma ${index + 1}` : "Hora de la alarma"}
+                  {horasSeleccionadas.length > 1 ? "Hora de la primera toma" : "Hora de la alarma"}
                 </Text>
                 <TouchableOpacity
                   style={styles.input}
-                  onPress={() => setPickerIndexActivo(index)}
+                  onPress={() => setPickerIndexActivo(0)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Elegir hora de la toma ${index + 1}, actualmente ${formatearHoraVisual(hora)}`}
+                  accessibilityLabel={`Elegir hora de la primera toma, actualmente ${formatearHoraVisual(horasSeleccionadas[0])}`}
                 >
-                  <Text style={{ fontSize: 19 }}>{formatearHoraVisual(hora)}</Text>
+                  <Text style={styles.horaTexto}>{formatearHoraVisual(horasSeleccionadas[0])}</Text>
                 </TouchableOpacity>
-              </View>
-            ))}
+
+                {horasSeleccionadas.length > 1 && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.desplegableBoton}
+                      onPress={() => setVerOtrasTomas((v) => !v)}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: verOtrasTomas }}
+                      accessibilityLabel={`${verOtrasTomas ? "Ocultar" : "Ver"} las otras ${horasSeleccionadas.length - 1} tomas`}
+                    >
+                      <Text style={styles.desplegableTexto}>
+                        {verOtrasTomas ? "Ocultar" : "Ver"} las otras{" "}
+                        {horasSeleccionadas.length - 1} tomas
+                      </Text>
+                      <Icon
+                        name={verOtrasTomas ? "chevron-up-outline" : "chevron-down-outline"}
+                        size={22}
+                        color={COLORS.teal}
+                      />
+                    </TouchableOpacity>
+                    {verOtrasTomas &&
+                      horasSeleccionadas.slice(1).map((hora, i) => (
+                        <View key={i} style={styles.medDetailRow}>
+                          <Icon name="time-outline" size={18} color={COLORS.inkSoft} />
+                          <Text style={styles.medDetail}>
+                            Toma {i + 2}: {formatearHoraVisual(hora)}
+                          </Text>
+                        </View>
+                      ))}
+                  </>
+                )}
+              </>
+            ) : (
+              horasSeleccionadas.map((hora, index) => (
+                <View key={index}>
+                  <Text style={styles.label}>
+                    {horasSeleccionadas.length > 1
+                      ? `Hora — Toma ${index + 1}`
+                      : "Hora de la alarma"}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.input}
+                    onPress={() => setPickerIndexActivo(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Elegir hora de la toma ${index + 1}, actualmente ${formatearHoraVisual(hora)}`}
+                  >
+                    <Text style={styles.horaTexto}>{formatearHoraVisual(hora)}</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
 
             {pickerIndexActivo !== null && (
               <DateTimePicker
@@ -330,6 +478,10 @@ function MedicineForm({ editingId }: { editingId?: string }) {
                   const indice = pickerIndexActivo;
                   setPickerIndexActivo(Platform.OS === "ios" ? indice : null);
                   if (selectedDate && indice !== null) {
+                    if (intervalo != null) {
+                      setHorasSeleccionadas(calcularHorasPorIntervalo(selectedDate, intervalo));
+                      return;
+                    }
                     setHorasSeleccionadas((prev) => {
                       const nuevas = [...prev];
                       nuevas[indice] = selectedDate;

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { DoseRow } from "@/components/dose-row";
 import { Icon } from "@/components/icon";
 import { StockBadge } from "@/components/stock-badge";
 import { COLORS } from "@/constants/design-tokens";
-import { Medicina, stockBajo } from "@/services/medicine-model";
+import { Medicina, stockBajo, textoFinTratamiento } from "@/services/medicine-model";
+import { useStyles } from "@/context/font-scale-provider";
 
 type MedicineCardProps = {
   medicina: Medicina;
@@ -15,6 +15,7 @@ type MedicineCardProps = {
 };
 
 export function MedicineCard({ medicina, onEditar, onEliminar, onMarcarTomada }: MedicineCardProps) {
+  const styles = useStyles();
   const [expandido, setExpandido] = useState(false);
 
   const resumenCiclo =
@@ -54,6 +55,15 @@ export function MedicineCard({ medicina, onEditar, onEliminar, onMarcarTomada }:
           {resumenCiclo} · {resumenFrecuencia}
         </Text>
       </View>
+
+      {medicina.tipoCiclo === "temporal" && medicina.fechaFin && (
+        <View style={styles.medDetailRow}>
+          <Icon name="calendar-outline" size={18} color={COLORS.teal} />
+          <Text style={[styles.medDetail, { color: COLORS.teal, fontWeight: "bold" }]}>
+            {textoFinTratamiento(new Date(medicina.fechaFin))}
+          </Text>
+        </View>
+      )}
 
       {medicina.stockActual != null && stockBajo(medicina) && (
         <StockBadge stockActual={medicina.stockActual} />

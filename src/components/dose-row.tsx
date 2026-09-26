@@ -1,8 +1,8 @@
 import { Text, TouchableOpacity, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { COLORS } from "@/constants/design-tokens";
 import { formatearHoraVisual, Medicina, parsearHora, yaTomadaEnEsteTurno } from "@/services/medicine-model";
+import { useStyles } from "@/context/font-scale-provider";
 
 type DoseRowProps = {
   med: Medicina;
@@ -11,6 +11,7 @@ type DoseRowProps = {
 };
 
 export function DoseRow({ med, horaIndex, onMarcarTomada }: DoseRowProps) {
+  const styles = useStyles();
   const tomada = yaTomadaEnEsteTurno(med, horaIndex);
   const horaTexto = formatearHoraVisual(parsearHora(med.horas[horaIndex]));
   const etiquetaToma = med.horas.length > 1 ? `Toma ${horaIndex + 1} — ${horaTexto}` : horaTexto;

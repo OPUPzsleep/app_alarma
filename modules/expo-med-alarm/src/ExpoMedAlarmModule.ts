@@ -1,6 +1,6 @@
 import { NativeModule, requireNativeModule } from "expo";
 
-import { AlarmActionData, ExpoMedAlarmModuleEvents } from "./ExpoMedAlarm.types";
+import { AccionPendiente, AlarmActionData, ExpoMedAlarmModuleEvents } from "./ExpoMedAlarm.types";
 
 declare class ExpoMedAlarmModule extends NativeModule<ExpoMedAlarmModuleEvents> {
   scheduleAlarm(
@@ -23,6 +23,7 @@ declare class ExpoMedAlarmModule extends NativeModule<ExpoMedAlarmModuleEvents> 
   cancelAplazo(medId: number, horaIndex: number, intentos: number): void;
   stopRinging(): void;
   getLaunchAlarmData(): AlarmActionData | null;
+  takePendingActions(): AccionPendiente[];
   canScheduleExactAlarms(): boolean;
   requestExactAlarmPermission(): void;
   isIgnoringBatteryOptimizations(): boolean;

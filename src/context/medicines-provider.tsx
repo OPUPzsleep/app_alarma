@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { AppState } from "react-native";
+import ExpoMedAlarm from "../../modules/expo-med-alarm/src/ExpoMedAlarmModule";
 import {
   aplazarToma,
   cancelarAlarmasDeMedicina,
@@ -22,7 +24,7 @@ type MedicinesContextValue = {
   // siempre quedan guardados de todas formas, esto es solo para avisar.
   guardarMedicina: (medData: Medicina) => Promise<boolean>;
   eliminarMedicina: (id: number) => Promise<void>;
-  marcarComoTomada: (id: number, horaIndex: number) => Promise<ResultadoAccion>;
+  marcarComoTomada: (id: number, horaIndex: number, fechaISO?: string) => Promise<ResultadoAccion>;
   registrarAplazo: (med: Medicina, horaIndex: number, intentos: number) => Promise<void>;
   agregarImportadas: (importadas: Medicina[]) => Promise<{ agregadas: number; alarmasOk: boolean }>;
   reemplazarTodas: (importadas: Medicina[]) => Promise<boolean>;
@@ -48,16 +50,6 @@ const sincronizarAlarmasSeguro = (lista: Medicina[]): boolean => {
 export function MedicinesProvider({ children }: { children: ReactNode }) {
   const [medicinas, setMedicinas] = useState<Medicina[]>([]);
   const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { medicinas: cargadas } = await loadMedications();
-      setMedicinas(cargadas);
-      await prepararNotificaciones();
-      sincronizarAlarmasSeguro(cargadas);
-      setCargando(false);
-    })();
-  }, []);
 
   const aplicarLista = useCallback(async (lista: Medicina[]) => {
     const resultado = await saveMedications(lista);
@@ -93,15 +85,21 @@ export function MedicinesProvider({ children }: { children: ReactNode }) {
   // Siempre relee de disco (no de este estado) porque puede dispararse desde
   // una alarma nativa recién abierta en frío, antes de que el estado de
   // React llegue a cargar.
+  // fechaISO viene de una toma confirmada desde la notificación y registrada
+  // después: se guarda con la hora real en que se tocó el botón.
   const marcarComoTomada = useCallback(
-    async (id: number, horaIndex: number): Promise<ResultadoAccion> => {
+    async (id: number, horaIndex: number, fechaISO?: string): Promise<ResultadoAccion> => {
       const { medicinas: actuales } = await loadMedications();
       const med = actuales.find((m) => m.id === id);
       if (!med) return { ok: false, mensaje: "No se encontró la medicina." };
 
       cancelarAplazosPendientes(med);
 
-      if (yaTomadaEnEsteTurno(med, horaIndex)) {
+      const ultimaToma = med.ultimaTomaPorHorario?.[horaIndex];
+      const yaRegistrada = fechaISO
+        ? !!ultimaToma && new Date(ultimaToma).getTime() >= new Date(fechaISO).getTime()
+        : yaTomadaEnEsteTurno(med, horaIndex);
+      if (yaRegistrada) {
         return {
           ok: false,
           mensaje:
@@ -109,7 +107,7 @@ export function MedicinesProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      const ahoraISO = new Date().toISOString();
+      const ahoraISO = fechaISO ?? new Date().toISOString();
       const esTemporal = med.tipoCiclo === "temporal";
       const tomasActuales = esTemporal ? (med.tomasCompletadas ?? 0) + 1 : med.tomasCompletadas;
 
@@ -164,6 +162,61 @@ export function MedicinesProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  // Registra los botones de la notificación que Android ya resolvió (sonido
+  // apagado y aplazo programado en nativo). Encadenado para que dos llamadas
+  // seguidas (arranque + volver a primer plano) no procesen en paralelo.
+  const colaPendientes = useRef(Promise.resolve());
+  const procesarPendientes = useCallback(() => {
+    colaPendientes.current = colaPendientes.current.then(async () => {
+      const acciones = ExpoMedAlarm.takePendingActions();
+      for (const accion of acciones) {
+        const fechaISO = new Date(accion.fechaMs).toISOString();
+        if (accion.accion === "tomada") {
+          await marcarComoTomada(accion.medId, accion.horaIndex, fechaISO);
+        } else {
+          const { medicinas: actuales } = await loadMedications();
+          const med = actuales.find((m) => m.id === accion.medId);
+          if (!med) continue;
+          await registrarEvento({
+            medId: med.id,
+            medNombre: med.nombre,
+            horaIndex: accion.horaIndex,
+            horaProgramada: med.horas[accion.horaIndex] ?? "",
+            fechaHoraTomaISO: fechaISO,
+            tipoEvento: "aplazada",
+          });
+        }
+      }
+    });
+    return colaPendientes.current;
+  }, [marcarComoTomada]);
+
+  useEffect(() => {
+    (async () => {
+      // Primero se registran los botones tocados en la notificación mientras
+      // la app estaba cerrada, así la lista que se carga ya los incluye.
+      await procesarPendientes();
+      const { medicinas: cargadas } = await loadMedications();
+      setMedicinas(cargadas);
+      await prepararNotificaciones();
+      sincronizarAlarmasSeguro(cargadas);
+      setCargando(false);
+    })();
+  }, [procesarPendientes]);
+
+  useEffect(() => {
+    const suscripcionEstado = AppState.addEventListener("change", (estado) => {
+      if (estado === "active") procesarPendientes();
+    });
+    const suscripcionNativa = ExpoMedAlarm.addListener("onPendingActions", () => {
+      procesarPendientes();
+    });
+    return () => {
+      suscripcionEstado.remove();
+      suscripcionNativa.remove();
+    };
+  }, [procesarPendientes]);
 
   const agregarImportadas = useCallback(
     async (importadas: Medicina[]) => {

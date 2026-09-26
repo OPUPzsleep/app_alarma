@@ -1,12 +1,13 @@
 import { router } from "expo-router";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { MedicineCard } from "@/components/medicine-card";
 import { COLORS } from "@/constants/design-tokens";
 import { useMedicines } from "@/context/medicines-provider";
+import { useStyles } from "@/context/font-scale-provider";
 
 export default function InicioScreen() {
+  const styles = useStyles();
   const { medicinas, eliminarMedicina, marcarComoTomada } = useMedicines();
   const activas = medicinas.filter((med) => med.estado === "activa");
 

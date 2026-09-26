@@ -18,6 +18,12 @@ object AlarmConstants {
 
   const val CHANNEL_ID = "alarmas-medicinas-nativas"
 
+  // Deben coincidir con MAX_APLAZOS y SEGUNDOS_APLAZO de medicine-model.ts:
+  // el botón "La voy a tomar" de la notificación ahora programa el aplazo
+  // desde nativo, sin pasar por JS.
+  const val MAX_APLAZOS = 3
+  const val SEGUNDOS_APLAZO = 120
+
   // medId es un Date.now() de JS (13 dígitos), no entra en un Int de 32 bits,
   // así que se combina con hashCode() (mezcla los 64 bits en 32) en vez de
   // multiplicar directo, para que el requestCode de PendingIntent siga

@@ -8,10 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { styles } from "@/app/estilos";
 import { Icon } from "@/components/icon";
 import { useMedicines } from "@/context/medicines-provider";
 import { responderPregunta } from "@/services/chat-responder";
+import { useStyles } from "@/context/font-scale-provider";
 
 type ChatMessage = {
   id: number;
@@ -20,6 +20,7 @@ type ChatMessage = {
 };
 
 export default function ChatScreen() {
+  const styles = useStyles();
   const { medicinas } = useMedicines();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
